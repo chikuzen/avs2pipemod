@@ -21,6 +21,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
+#include <time.h>
 #include "common.h"
 
 void a2p_log(int level, const char *message, ...)
@@ -53,4 +55,11 @@ void a2p_log(int level, const char *message, ...)
 
     va_end(args);
     if(level == A2P_LOG_ERROR) exit(2);
+}
+
+double a2p_gettime()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec + tv.tv_usec * 1e-6;
 }

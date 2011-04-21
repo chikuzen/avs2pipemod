@@ -85,6 +85,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env)
     void *buff;
     size_t size, count, step;
     uint64_t i, wrote, target;
+    double start, end, elapsed;
 
     info = avs_get_video_info(clip);
 
@@ -106,6 +107,8 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env)
             (info->num_audio_samples / info->audio_samples_per_second),
             info->audio_samples_per_second, info->nchannels);
 
+    start = a2p_gettime();
+    
     header = wave_create_riff_header(format, info->nchannels,
                                      info->audio_samples_per_second,
                                      avs_bytes_per_channel_sample(info),
@@ -134,6 +137,11 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env)
         (100 * wrote) / target);
     free(buff);
     free(header);
+
+    end = a2p_gettime();
+    elapsed = end - start;
+    a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec.\n", elapsed);
+
     if(wrote != target) {
         a2p_log(A2P_LOG_ERROR, "only wrote %I64u of %I64u samples.\n",
                 wrote, target);
@@ -151,6 +159,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
     size_t count, step;
     int32_t w, h, f, p, i, pitch, h_uv, v_uv, np;
     int32_t wrote, target;
+    double start, end, elapsed;
 
     info = avs_get_video_info(clip);
 
@@ -220,6 +229,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
             info->width, info->height, yuv_csp, !avs_is_field_based(info) ?
              "progressive" : !avs_is_bff(info) ? "tff" : "bff"); // default tff
 
+    start = a2p_gettime();
+
     // YUV4MPEG2 header http://wiki.multimedia.cx/index.php?title=YUV4MPEG2
     fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%s A0:0 C%s\n", info->width,
             info->height, info->fps_numerator, info->fps_denominator,
@@ -253,8 +264,16 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
         //    wrote, (100 * wrote) / target);
     }
     fflush(stdout); // clear buffers before we exit
+
+    end = a2p_gettime();
+    elapsed = end - start;
+
     a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n", 
         wrote, (100 * wrote) / target);
+
+    a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
+        elapsed, wrote / elapsed);
+
     if(wrote != target) {
         a2p_log(A2P_LOG_ERROR, "only wrote %d of %d frames.\n", wrote, target);
     }
