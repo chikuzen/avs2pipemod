@@ -169,7 +169,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     const BYTE *buff; // BYTE from avisynth_c.h not windows headers
     char * yuv_csp;
     size_t count, step;
-    int32_t w, h, f, p, i, pitch, h_uv, v_uv, np;
+    int32_t w, h, f, p, i, pitch, h_uv, v_uv, np, k;
     int32_t wrote, target;
     double start, end, elapsed;
 
@@ -177,6 +177,29 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 
     if(!avs_has_video(info))
         a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
+
+    if(avs_is_field_based(info)) {
+        a2p_log(A2P_LOG_WARNING, "clip is FieldBased.\n");
+        fprintf(stderr, "           yuv4mpeg2's spec doesn't support FieldBased clip.\n"
+                        "           choose what you want.\n"
+                        "           1:add AssumeFrameBased()  2:add Weave()  others:exit\n"
+                        "               input a number and press enter : ");
+        fscanf(stdin, "%d", &k);
+        switch(k) {
+            case 1:
+                a2p_log(A2P_LOG_INFO, "clip was assumed that FrameBased.\n", 0);
+                clip = avisynth_filter(clip, env, "AssumeFrameBased");
+                info = avs_get_video_info(clip);
+                break;
+            case 2:
+                a2p_log(A2P_LOG_INFO, "clip was Weaved\n", 0);
+                clip = avisynth_filter(clip, env, "Weave");
+                info = avs_get_video_info(clip);
+                break;
+            default:
+                a2p_log(A2P_LOG_ERROR, "good bye...\n", 2);
+        }
+    }
 
     // Number of planes normally 3;
     np = 3;

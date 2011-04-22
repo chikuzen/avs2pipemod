@@ -5,3 +5,4 @@ Differences with original
 * contents of 'info'
 * New options 'aud16' and 'aud24'.
 * 'y4mp', 'y4mt' and 'y4mb' options instead of 'video'.
+* FieldBased input will be corrected to framebased on yuv4mpeg2 output mode. 
