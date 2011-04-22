@@ -156,7 +156,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 }
 
 void
-do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
+do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 {
     const AVS_VideoInfo *info;
     AVS_VideoFrame *frame;
@@ -183,7 +183,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
         #ifdef A2P_AVS26
         case AVS_CS_BGR32:
         case AVS_CS_BGR24:
-            a2p_log(A2P_LOG_INFO, "converting video to yv24.\n", 0);
+            a2p_log(A2P_LOG_INFO, "converting video to planar yuv444.\n", 0);
             clip = avisynth_filter(clip, env, "ConvertToYV24");
             info = avs_get_video_info(clip);
         case AVS_CS_YV24:
@@ -193,7 +193,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
             v_uv = 0;
             break;
         case AVS_CS_YUY2:
-            a2p_log(A2P_LOG_INFO, "converting video to yv16.\n", 0);
+            a2p_log(A2P_LOG_INFO, "converting video to planar yuv422.\n", 0);
             clip = avisynth_filter(clip, env, "ConvertToYV16");
             info = avs_get_video_info(clip);
         case AVS_CS_YV16:
@@ -215,17 +215,24 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
             v_uv = 0;
             np = 1; // special case only one plane for mono
             break;
-        #endif        
+        #endif
         default:
-            a2p_log(A2P_LOG_INFO, "converting video to yv12.\n", 0);
-            clip = avisynth_filter(clip, env, "ConvertToYV12");
-            info = avs_get_video_info(clip);
-        case AVS_CS_YV12:
-            yuv_csp = "420";
+            if(!avs_is_planar(info)) {
+                a2p_log(A2P_LOG_INFO, "converting video to planar yuv420.\n", 0);
+                if(!(info->width % 2) && !(info->height % 2)) {
+                    clip = avisynth_filter(clip, env, "ConvertToYV12");
+                    info = avs_get_video_info(clip);
+                } else
+                    a2p_log(A2P_LOG_ERROR, "invalid resolution. conversion failed.\n", 0);
+            }
+            yuv_csp = "420mpeg2"; //same as avisynth default subsampling type of yuv420
             count = info->width * info->height * 3 / 2;
             h_uv = 1;
             v_uv = 1;
     }
+
+    if(!avs_is_planar(info))
+        a2p_log(A2P_LOG_ERROR, "colorspace handling failed. leaving...\n", 2);
 
     if(_setmode(_fileno(stdout), _O_BINARY) == -1) {
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
@@ -233,18 +240,16 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
 
     a2p_log(A2P_LOG_INFO, "writing %d frames of %d/%d fps, %dx%d YUV%s %s video.\n",
             info->num_frames, info->fps_numerator, info->fps_denominator,
-            info->width, info->height, yuv_csp, !avs_is_field_based(info) ?
-             "progressive" : !avs_is_bff(info) ? "tff" : "bff"); // default tff
+            info->width, info->height, yuv_csp, ip == 'p' ? "progressive" :
+            ip == 't' ? "tff" : "bff");
 
     start = a2p_gettime();
 
-    // YUV4MPEG2 header http://wiki.multimedia.cx/index.php?title=YUV4MPEG2
-    fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%s A0:0 C%s\n", info->width,
-            info->height, info->fps_numerator, info->fps_denominator,
-            !avs_is_field_based(info) ? "p" : !avs_is_bff(info) ? "t" : "b",
-            yuv_csp);
+    // YUV4MPEG2 header http://linux.die.net/man/5/yuv4mpeg
+    fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A0:0 C%s\n", info->width,
+            info->height, info->fps_numerator, info->fps_denominator, ip, yuv_csp);
     fflush(stdout);
-    
+
     // method from avs2yuv converted to c
     target = info->num_frames;
     wrote = 0;
@@ -526,7 +531,9 @@ main (int argc, char *argv[])
         A2P_ACTION_AUDIO,
         A2P_ACTION_AUD16,
         A2P_ACTION_AUD24,
-        A2P_ACTION_VIDEO,
+        A2P_ACTION_Y4MP,
+        A2P_ACTION_Y4MT,
+        A2P_ACTION_Y4MB,
         A2P_ACTION_INFO,
         A2P_ACTION_X264BD,
         A2P_ACTION_NOTHING    
@@ -541,8 +548,12 @@ main (int argc, char *argv[])
             action = A2P_ACTION_AUD16;
         } else if(strcmp(argv[1], "aud24") == 0) {
             action = A2P_ACTION_AUD24;
-        } else if(strcmp(argv[1], "video") == 0) {
-            action = A2P_ACTION_VIDEO;
+        } else if(strcmp(argv[1], "y4mp") == 0) {
+            action = A2P_ACTION_Y4MP;
+        } else if(strcmp(argv[1], "y4mt") == 0) {
+            action = A2P_ACTION_Y4MT;
+        } else if(strcmp(argv[1], "y4mb") == 0) {
+            action = A2P_ACTION_Y4MB;
         } else if(strcmp(argv[1], "info") == 0) {
             action = A2P_ACTION_INFO;
         } else if(strcmp(argv[1], "x264bd") == 0) {
@@ -564,7 +575,9 @@ main (int argc, char *argv[])
                         "            and output wav extensible format audio to stdout.\n");
         fprintf(stderr, "   aud24  -  convert bit depth of audio to 24bit integer,\n"
                         "            and output wav extensible format audio to stdout.\n");
-        fprintf(stderr, "   video  - output yuv4mpeg2 format video to stdout.\n");
+        fprintf(stderr, "   y4mp   - output yuv4mpeg2 format video to stdout as progressive.\n");
+        fprintf(stderr, "   y4mt   - output yuv4mpeg2 format video to stdout as tff interlaced.\n");
+        fprintf(stderr, "   y4mb   - output yuv4mpeg2 format video to stdout as bff interlaced.\n");
         fprintf(stderr, "   info   - output information about aviscript clip.\n");
         fprintf(stderr, "   x264bd - suggest x264 arguments for bluray disc encoding.\n");
         exit(2);
@@ -583,8 +596,14 @@ main (int argc, char *argv[])
         case A2P_ACTION_AUD24:
             do_audio(clip, env, 24);
             break;
-        case A2P_ACTION_VIDEO:
-            do_video(clip, env);
+        case A2P_ACTION_Y4MP:
+            do_video(clip, env, 'p');
+            break;
+        case A2P_ACTION_Y4MT:
+            do_video(clip, env, 't');
+            break;
+        case A2P_ACTION_Y4MB:
+            do_video(clip, env, 'b');
             break;
         case A2P_ACTION_INFO:
             do_info(clip, env, input);
