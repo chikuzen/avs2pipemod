@@ -569,7 +569,7 @@ main (int argc, char *argv[])
         #else
             fprintf(stderr, "avs2pipe for AviSynth 2.5.8\n");
         #endif
-        fprintf(stderr, "Usage: avs2pipe [audio|video|info|x264] input.avs\n");
+        fprintf(stderr, "Usage: avs2pipe [only one option] input.avs\n");
         fprintf(stderr, "   audio  -  output wav extensible format audio to stdout.\n");
         fprintf(stderr, "   aud16  -  convert bit depth of audio to 16bit integer,\n"
                         "            and output wav extensible format audio to stdout.\n");
