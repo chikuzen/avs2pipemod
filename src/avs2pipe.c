@@ -34,6 +34,8 @@
 #include "common.h"
 #include "wave.h"
 
+#define BM_OUT_PAR_FRAMES 50
+
 AVS_Clip *
 avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter)
 {
@@ -393,6 +395,64 @@ do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
 }
 
 void
+do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
+{
+    const AVS_VideoInfo *info;
+    AVS_VideoFrame *frame;
+    int32_t f, i;
+    int32_t passed, target, count, parcent;
+    double start, running, end, elapsed, fps;
+
+    info = avs_get_video_info(clip);
+
+    if(!avs_has_video(info))
+        a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
+
+    do_info(clip, env, input);
+
+    target = info->num_frames;
+    count = target / BM_OUT_PAR_FRAMES;
+    parcent = 0;
+    passed = 0;
+
+    a2p_log(A2P_LOG_INFO, "benchmarking %d frames video.\n", target);
+
+    start = a2p_gettime();
+
+    for(i = 0; i < count; i++) {
+        for(f = 0; f < BM_OUT_PAR_FRAMES; f++) {
+            frame = avs_get_frame(clip, passed);
+            avs_release_frame(frame);
+            passed++;
+        }
+        running = a2p_gettime();
+        elapsed = running - start;
+        fps = passed / elapsed;
+        parcent = 100 * passed / target;
+        a2p_log(A2P_LOG_REPEAT, "[elapsed %.3f sec] %d/%d frames [%d%%][%.3ffps]",
+                    elapsed, passed, target, parcent, fps);
+    }
+
+    while(passed < target) {
+        frame = avs_get_frame(clip, passed);
+        avs_release_frame(frame);
+        passed++;
+    }
+
+    end = a2p_gettime();
+    elapsed = end - start;
+    fps = passed / elapsed;
+
+    fprintf(stderr, "\n");
+    a2p_log(A2P_LOG_INFO, "%d frames has passed [100%%][%.3ffps]\n", passed, fps);
+    fprintf(stdout, "benchmark result: total elapsed time is %.3f sec [%.3ffps]\n",
+            elapsed, fps);
+
+    if(passed != target)
+        a2p_log(A2P_LOG_ERROR, "only passed %d of %d frames.\n", passed, target);
+}
+
+void
 do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env)
 {
     // x264 arguments from http://sites.google.com/site/x264bluray/
@@ -563,29 +623,31 @@ main (int argc, char *argv[])
         A2P_ACTION_Y4MB,
         A2P_ACTION_INFO,
         A2P_ACTION_X264BD,
+        A2P_ACTION_BENCHMARK,
         A2P_ACTION_NOTHING    
     } action;
 
     action = A2P_ACTION_NOTHING;
 
     if(argc == 3) {
-        if(strcmp(argv[1], "audio") == 0) {
+        if(strcmp(argv[1], "audio") == 0)
             action = A2P_ACTION_AUDIO;
-        } else if(strcmp(argv[1], "aud16") == 0) {
+        else if(strcmp(argv[1], "aud16") == 0)
             action = A2P_ACTION_AUD16;
-        } else if(strcmp(argv[1], "aud24") == 0) {
+        else if(strcmp(argv[1], "aud24") == 0)
             action = A2P_ACTION_AUD24;
-        } else if(strcmp(argv[1], "y4mp") == 0) {
+        else if(strcmp(argv[1], "y4mp") == 0)
             action = A2P_ACTION_Y4MP;
-        } else if(strcmp(argv[1], "y4mt") == 0) {
+        else if(strcmp(argv[1], "y4mt") == 0)
             action = A2P_ACTION_Y4MT;
-        } else if(strcmp(argv[1], "y4mb") == 0) {
+        else if(strcmp(argv[1], "y4mb") == 0)
             action = A2P_ACTION_Y4MB;
-        } else if(strcmp(argv[1], "info") == 0) {
+        else if(strcmp(argv[1], "info") == 0)
             action = A2P_ACTION_INFO;
-        } else if(strcmp(argv[1], "x264bd") == 0) {
+        else if(strcmp(argv[1], "x264bd") == 0)
             action = A2P_ACTION_X264BD;
-        }
+        else if(strcmp(argv[1], "benchmark") == 0)
+            action = A2P_ACTION_BENCHMARK;
         input = argv[2];
     }
 
@@ -607,6 +669,7 @@ main (int argc, char *argv[])
         fprintf(stderr, "   y4mb   - output yuv4mpeg2 format video to stdout as bff interlaced.\n");
         fprintf(stderr, "   info   - output information about aviscript clip.\n");
         fprintf(stderr, "   x264bd - suggest x264 arguments for bluray disc encoding.\n");
+        fprintf(stderr, "   benchmark - do benchmark and output results to stdout.\n");
         exit(2);
     }
 
@@ -637,6 +700,9 @@ main (int argc, char *argv[])
             break;
         case A2P_ACTION_X264BD:
             do_x264bd(clip, env);
+            break;
+        case A2P_ACTION_BENCHMARK:
+            do_benchmark(clip, env, input);
             break;
         case A2P_ACTION_NOTHING: // Removing GCC warning, this action is handled above
             break;
