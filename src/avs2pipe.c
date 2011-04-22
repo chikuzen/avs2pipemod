@@ -658,18 +658,19 @@ main (int argc, char *argv[])
         #else
             fprintf(stderr, "avs2pipe for AviSynth 2.5.8\n");
         #endif
-        fprintf(stderr, "Usage: avs2pipe [only one option] input.avs\n");
-        fprintf(stderr, "   audio  -  output wav extensible format audio to stdout.\n");
-        fprintf(stderr, "   aud16  -  convert bit depth of audio to 16bit integer,\n"
-                        "            and output wav extensible format audio to stdout.\n");
-        fprintf(stderr, "   aud24  -  convert bit depth of audio to 24bit integer,\n"
-                        "            and output wav extensible format audio to stdout.\n");
-        fprintf(stderr, "   y4mp   - output yuv4mpeg2 format video to stdout as progressive.\n");
-        fprintf(stderr, "   y4mt   - output yuv4mpeg2 format video to stdout as tff interlaced.\n");
-        fprintf(stderr, "   y4mb   - output yuv4mpeg2 format video to stdout as bff interlaced.\n");
-        fprintf(stderr, "   info   - output information about aviscript clip.\n");
-        fprintf(stderr, "   x264bd - suggest x264 arguments for bluray disc encoding.\n");
-        fprintf(stderr, "   benchmark - do benchmark and output results to stdout.\n");
+        fprintf(stderr,
+                "Usage: avs2pipe [only one option] input.avs\n"
+                "   audio  -  output wav extensible format audio to stdout.\n"
+                "   aud16  -  convert bit depth of audio to 16bit integer,\n"
+                "            and output wav extensible format audio to stdout.\n"
+                "   aud24  -  convert bit depth of audio to 24bit integer,\n"
+                "            and output wav extensible format audio to stdout.\n"
+                "   y4mp   - output yuv4mpeg2 format video to stdout as progressive.\n"
+                "   y4mt   - output yuv4mpeg2 format video to stdout as tff interlaced.\n"
+                "   y4mb   - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
+                "   info   - output information about aviscript clip.\n"
+                "   x264bd - suggest x264 arguments for bluray disc encoding.\n"
+                "   benchmark - do benchmark and output results to stdout.\n");
         exit(2);
     }
 
