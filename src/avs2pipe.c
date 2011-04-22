@@ -77,7 +77,7 @@ avisynth_source(char *file, AVS_ScriptEnvironment *env)
 }
 
 void
-do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env)
+do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 {
     const AVS_VideoInfo *info;
     WaveRiffHeader *header;
@@ -91,6 +91,13 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env)
 
     if(!avs_has_audio(info)) {
         a2p_log(A2P_LOG_ERROR, "clip has no audio.\n", 0);
+    }
+
+    if(bit) {
+        a2p_log(A2P_LOG_INFO, "converting bit depth of audio to %dbit integer.\n", bit);
+        clip = (bit == 16) ? avisynth_filter(clip, env, "ConvertAudioTo16bit") :
+                             avisynth_filter(clip, env, "ConvertAudioTo24bit");
+        info = avs_get_video_info(clip);
     }
 
     if(info->sample_type == AVS_SAMPLE_FLOAT) {
@@ -517,6 +524,8 @@ main (int argc, char *argv[])
     char * input;
     enum {
         A2P_ACTION_AUDIO,
+        A2P_ACTION_AUD16,
+        A2P_ACTION_AUD24,
         A2P_ACTION_VIDEO,
         A2P_ACTION_INFO,
         A2P_ACTION_X264BD,
@@ -528,6 +537,10 @@ main (int argc, char *argv[])
     if(argc == 3) {
         if(strcmp(argv[1], "audio") == 0) {
             action = A2P_ACTION_AUDIO;
+        } else if(strcmp(argv[1], "aud16") == 0) {
+            action = A2P_ACTION_AUD16;
+        } else if(strcmp(argv[1], "aud24") == 0) {
+            action = A2P_ACTION_AUD24;
         } else if(strcmp(argv[1], "video") == 0) {
             action = A2P_ACTION_VIDEO;
         } else if(strcmp(argv[1], "info") == 0) {
@@ -546,7 +559,11 @@ main (int argc, char *argv[])
             fprintf(stderr, "avs2pipe for AviSynth 2.5.8\n");
         #endif
         fprintf(stderr, "Usage: avs2pipe [audio|video|info|x264] input.avs\n");
-        fprintf(stderr, "   audio  - output wav extensible format audio to stdout.\n");
+        fprintf(stderr, "   audio  -  output wav extensible format audio to stdout.\n");
+        fprintf(stderr, "   aud16  -  convert bit depth of audio to 16bit integer,\n"
+                        "            and output wav extensible format audio to stdout.\n");
+        fprintf(stderr, "   aud24  -  convert bit depth of audio to 24bit integer,\n"
+                        "            and output wav extensible format audio to stdout.\n");
         fprintf(stderr, "   video  - output yuv4mpeg2 format video to stdout.\n");
         fprintf(stderr, "   info   - output information about aviscript clip.\n");
         fprintf(stderr, "   x264bd - suggest x264 arguments for bluray disc encoding.\n");
@@ -558,7 +575,13 @@ main (int argc, char *argv[])
 
     switch(action) {
         case A2P_ACTION_AUDIO:
-            do_audio(clip, env);
+            do_audio(clip, env, 0);
+            break;
+        case A2P_ACTION_AUD16:
+            do_audio(clip, env, 16);
+            break;
+        case A2P_ACTION_AUD24:
+            do_audio(clip, env, 24);
             break;
         case A2P_ACTION_VIDEO:
             do_video(clip, env);
