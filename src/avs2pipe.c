@@ -280,34 +280,76 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env)
 }
 
 void
-do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env)
+do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
 {
     const AVS_VideoInfo *info;
+    char *field_order, *pix_fmt;
 
     info = avs_get_video_info(clip);
 
     if(avs_has_video(info)) {
-        fprintf(stdout, "v:width       %d\n", info->width);
-        fprintf(stdout, "v:height      %d\n", info->height);
-        fprintf(stdout, "v:fps         %d/%d\n",
+        fprintf(stdout, "script_name      %s\n", input);
+        fprintf(stdout, "v:width          %d\n", info->width);
+        fprintf(stdout, "v:height         %d\n", info->height);
+        fprintf(stdout, "v:fps            %d/%d\n",
                 info->fps_numerator, info->fps_denominator);
-        fprintf(stdout, "v:frames      %d\n", info->num_frames);
-        fprintf(stdout, "v:duration    %d\n",
-                info->num_frames * info->fps_denominator / info->fps_numerator);
-        fprintf(stdout, "v:interlaced  %s\n", !avs_is_field_based(info) ?
-                "no" : !avs_is_bff(info) ? "tff" : "bff");
-        fprintf(stdout, "v:pixel_type  %x\n", info->pixel_type);
+        fprintf(stdout, "v:frames         %d\n", info->num_frames);
+        fprintf(stdout, "v:duration[sec]  %.3f\n",
+                1.0 * info->num_frames * info->fps_denominator / info->fps_numerator);
+        fprintf(stdout, "v:image_type     %s\n", !avs_is_field_based(info) ?
+                "framebased" : "fieldbased");
+        switch(info->image_type) {
+            case 1:
+            case 5:
+                field_order = "assumed bottom field first";
+                break;
+            case 2:
+            case 6:
+                field_order = "assumed top field first";
+                break;
+            default:
+                field_order = "not specified";
+        }
+        fprintf(stdout, "v:field_order    %s\n", field_order);
+        switch(info->pixel_type) {
+            #ifdef A2P_AVS26
+            case AVS_CS_YV24:
+                pix_fmt = "YV24";
+                break;
+            case AVS_CS_YV16:
+                pix_fmt = "YV16";
+                break;
+            case AVS_CS_YV411:
+                pix_fmt = "YV411";
+                break;
+            case AVS_CS_Y8:
+                pix_fmt = "Y8";
+                break;
+            #endif
+            case AVS_CS_BGR32:
+                pix_fmt = "RGB32";
+                break;
+            case AVS_CS_BGR24:
+                pix_fmt = "RGB24";
+                break;
+            case AVS_CS_YUY2:
+                pix_fmt = "YUY2";
+                break;
+            default:
+                pix_fmt = "YV12";
+        }
+        fprintf(stdout, "v:pixel_type     %s\n", pix_fmt);
     }
     if(avs_has_audio(info)) {
-        fprintf(stdout, "a:sample_rate %d\n", info->audio_samples_per_second);
-        fprintf(stdout, "a:format      %s\n",
+        fprintf(stdout, "a:sample_rate    %d\n", info->audio_samples_per_second);
+        fprintf(stdout, "a:format         %s\n",
                 info->sample_type == AVS_SAMPLE_FLOAT ? "float" : "pcm");
-        fprintf(stdout, "a:bit_depth   %d\n",
+        fprintf(stdout, "a:bit_depth      %d\n",
                 avs_bytes_per_channel_sample(info) * 8);
-        fprintf(stdout, "a:channels    %d\n", info->nchannels);
-        fprintf(stdout, "a:samples     %I64d\n", info->num_audio_samples);
-        fprintf(stdout, "a:duration    %I64d\n",
-                info->num_audio_samples / info->audio_samples_per_second);
+        fprintf(stdout, "a:channels       %d\n", info->nchannels);
+        fprintf(stdout, "a:samples        %I64d\n", info->num_audio_samples);
+        fprintf(stdout, "a:duration[sec]  %.3f\n",
+                1.0 * info->num_audio_samples / info->audio_samples_per_second);
     }
 }
 
@@ -522,7 +564,7 @@ main (int argc, char *argv[])
             do_video(clip, env);
             break;
         case A2P_ACTION_INFO:
-            do_info(clip, env);
+            do_info(clip, env, input);
             break;
         case A2P_ACTION_X264BD:
             do_x264bd(clip, env);
