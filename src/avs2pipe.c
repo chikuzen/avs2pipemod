@@ -89,9 +89,8 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 
     info = avs_get_video_info(clip);
 
-    if(!avs_has_audio(info)) {
+    if(!avs_has_audio(info))
         a2p_log(A2P_LOG_ERROR, "clip has no audio.\n", 0);
-    }
 
     if(bit) {
         a2p_log(A2P_LOG_INFO, "converting bit depth of audio to %dbit integer.\n", bit);
@@ -100,26 +99,25 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
         info = avs_get_video_info(clip);
     }
 
-    if(info->sample_type == AVS_SAMPLE_FLOAT) {
+    if(info->sample_type == AVS_SAMPLE_FLOAT)
         format = WAVE_FORMAT_IEEE_FLOAT;
-    } else {
+    else
         format = WAVE_FORMAT_PCM;
-    }
 
-    if(_setmode(_fileno(stdout), _O_BINARY) == -1) {
+    if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n", 0);
-    }
 
-    a2p_log(A2P_LOG_INFO, "writing %I64d seconds of %d Hz, %d channel audio.\n",
-            (info->num_audio_samples / info->audio_samples_per_second),
+    a2p_log(A2P_LOG_INFO, "writing %.3f seconds of %d Hz, %d channel audio.\n",
+            (1.0 * info->num_audio_samples / info->audio_samples_per_second),
             info->audio_samples_per_second, info->nchannels);
 
     start = a2p_gettime();
-    
+
     header = wave_create_riff_header(format, info->nchannels,
                                      info->audio_samples_per_second,
                                      avs_bytes_per_channel_sample(info),
                                      info->num_audio_samples);
+
     fwrite(header, sizeof(*header), 1, stdout);
 
     count = info->audio_samples_per_second;
@@ -127,21 +125,30 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
     target = info->num_audio_samples;
     size = avs_bytes_per_channel_sample(info) * info->nchannels;
     buff = malloc(count * size);
+
     for (i = 0; i < target; i += count) {
-        if(target - i < count) count = (size_t) (target - i);
+        if(target - i < count)
+            count = (size_t) (target - i);
+
         avs_get_audio(clip, buff, i, count);
+
         step = fwrite(buff, size, count, stdout);
+
         // fail early if there is a problem instead of end of input
-        if(step != count) break;
+        if(step != count)
+            break;
+
         wrote += count;
         //a2p_log(A2P_LOG_REPEAT, "written %lld seconds [%lld%%]... ", 
         //    wrote / info->audio_samples_per_second,
         //    (100 * wrote) / target);
     }
+
     fflush(stdout); // clear buffers before we exit
+
     a2p_log(A2P_LOG_REPEAT, "finished, wrote %I64u seconds [%I64u%%].\n", 
-        wrote / info->audio_samples_per_second,
-        (100 * wrote) / target);
+        1.0 * wrote / info->audio_samples_per_second, (100 * wrote) / target);
+
     free(buff);
     free(header);
 
@@ -149,10 +156,8 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
     elapsed = end - start;
     a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec.\n", elapsed);
 
-    if(wrote != target) {
-        a2p_log(A2P_LOG_ERROR, "only wrote %I64u of %I64u samples.\n",
-                wrote, target);
-    }
+    if(wrote != target)
+        a2p_log(A2P_LOG_ERROR, "only wrote %I64u of %I64u samples.\n", wrote, target);
 }
 
 void
@@ -170,9 +175,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 
     info = avs_get_video_info(clip);
 
-    if(!avs_has_video(info)) {
+    if(!avs_has_video(info))
         a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
-    }
 
     // Number of planes normally 3;
     np = 3;
@@ -234,9 +238,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     if(!avs_is_planar(info))
         a2p_log(A2P_LOG_ERROR, "colorspace handling failed. leaving...\n", 2);
 
-    if(_setmode(_fileno(stdout), _O_BINARY) == -1) {
+    if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
-    }
 
     a2p_log(A2P_LOG_INFO, "writing %d frames of %d/%d fps, %dx%d YUV%s %s video.\n",
             info->num_frames, info->fps_numerator, info->fps_denominator,
@@ -270,7 +273,9 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
         // not sure release is needed, but it doesn't cause an error
         avs_release_frame(frame);
         // fail early if there is a problem instead of end of input
-        if(step != count) break;
+        if(step != count)
+            break;
+
         wrote++;
         //a2p_log(A2P_LOG_REPEAT, "written %d frames [%d%%]... ", 
         //    wrote, (100 * wrote) / target);
@@ -286,9 +291,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
         elapsed, wrote / elapsed);
 
-    if(wrote != target) {
+    if(wrote != target)
         a2p_log(A2P_LOG_ERROR, "only wrote %d of %d frames.\n", wrote, target);
-    }
 }
 
 void
@@ -308,8 +312,8 @@ do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
         fprintf(stdout, "v:frames         %d\n", info->num_frames);
         fprintf(stdout, "v:duration[sec]  %.3f\n",
                 1.0 * info->num_frames * info->fps_denominator / info->fps_numerator);
-        fprintf(stdout, "v:image_type     %s\n", !avs_is_field_based(info) ?
-                "framebased" : "fieldbased");
+        fprintf(stdout, "v:image_type     %s\n",
+                !avs_is_field_based(info) ? "framebased" : "fieldbased");
         switch(info->image_type) {
             case 1:
             case 5:
