@@ -33,6 +33,7 @@
 #endif
 #include "common.h"
 #include "wave.h"
+#include "version.h"
 
 #define BM_OUT_PAR_FRAMES 50
 #define Y4M_FRAME_HEADER_SIZE 6
@@ -114,7 +115,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
             (1.0 * info->num_audio_samples / info->audio_samples_per_second),
             info->audio_samples_per_second, info->nchannels);
 
-    start = a2p_gettime();
+    start = a2pm_gettime();
 
     header = wave_create_riff_header(format, info->nchannels,
                                      info->audio_samples_per_second,
@@ -155,7 +156,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
     free(buff);
     free(header);
 
-    end = a2p_gettime();
+    end = a2pm_gettime();
     elapsed = end - start;
     a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec.\n", elapsed);
 
@@ -210,8 +211,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 
 	// Setup Correct Colorspace Handling
 	// Thanks to Chikuzen @ Doom9 Forums
+    #ifdef A2P_AVS26
     switch(info->pixel_type) {
-        #ifdef A2P_AVS26
         case AVS_CS_BGR32:
         case AVS_CS_BGR24:
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv444.\n", 0);
@@ -246,9 +247,9 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             v_uv = 0;
             np = 1; // special case only one plane for mono
             break;
-        #endif
         default:
-            if(!avs_is_planar(info)) {
+        #endif
+            if((info->pixel_type != AVS_CS_I420) && (info->pixel_type != AVS_CS_YV12)) {
                 a2p_log(A2P_LOG_INFO, "converting video to planar yuv420.\n", 0);
                 if(!(info->width % 2) && !(info->height % 2)) {
                     clip = avisynth_filter(clip, env, "ConvertToYV12");
@@ -260,7 +261,9 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             count = info->width * info->height * 3 / 2;
             h_uv = 1;
             v_uv = 1;
+    #ifdef A2P_AVS26
     }
+    #endif
 
     if(!avs_is_planar(info))
         a2p_log(A2P_LOG_ERROR, "colorspace handling failed. leaving...\n", 2);
@@ -277,7 +280,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info->width, info->height, yuv_csp, ip == 'p' ? "progressive" :
             ip == 't' ? "tff" : "bff");
 
-    start = a2p_gettime();
+    start = a2pm_gettime();
 
     // YUV4MPEG2 header http://linux.die.net/man/5/yuv4mpeg
     fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A0:0 C%s\n", info->width,
@@ -313,7 +316,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 
     free(wbuff);
 
-    end = a2p_gettime();
+    end = a2pm_gettime();
     elapsed = end - start;
 
     a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n", 
@@ -423,7 +426,7 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
 
     a2p_log(A2P_LOG_INFO, "benchmarking %d frames video.\n", target);
 
-    start = a2p_gettime();
+    start = a2pm_gettime();
 
     for(i = 0; i < count; i++) {
         for(f = 0; f < BM_OUT_PAR_FRAMES; f++) {
@@ -431,7 +434,7 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
             avs_release_frame(frame);
             passed++;
         }
-        running = a2p_gettime();
+        running = a2pm_gettime();
         elapsed = running - start;
         fps = passed / elapsed;
         parcent = 100 * passed / target;
@@ -445,7 +448,7 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
         passed++;
     }
 
-    end = a2p_gettime();
+    end = a2pm_gettime();
     elapsed = end - start;
     fps = passed / elapsed;
 
@@ -660,12 +663,15 @@ main (int argc, char *argv[])
     if(action == A2P_ACTION_NOTHING) {
        
         #ifdef A2P_AVS26
-            fprintf(stderr, "avs2pipe for AviSynth 2.6.0 Alpha 2\n");
+            fprintf(stderr, "avs2pipemod for AviSynth 2.6.0 Alpha 2");
         #else
-            fprintf(stderr, "avs2pipe for AviSynth 2.5.8\n");
+            fprintf(stderr, "avs2pipemod for AviSynth 2.5.8");
         #endif
+
         fprintf(stderr,
-                "Usage: avs2pipe [only one option] input.avs\n"
+                "  %s\n"
+                "build on %s\n\n"
+                "Usage: %s [only one option] input.avs\n"
                 "   audio  -  output wav extensible format audio to stdout.\n"
                 "   aud16  -  convert bit depth of audio to 16bit integer,\n"
                 "            and output wav extensible format audio to stdout.\n"
@@ -676,7 +682,8 @@ main (int argc, char *argv[])
                 "   y4mb   - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
                 "   info   - output information about aviscript clip.\n"
                 "   x264bd - suggest x264 arguments for bluray disc encoding.\n"
-                "   benchmark - do benchmark and output results to stdout.\n");
+                "   benchmark - do benchmark and output results to stdout.\n"
+                , A2PM_VERSION, A2PM_DATE_OF_BUILD, argv[0]);
         exit(2);
     }
 

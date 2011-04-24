@@ -50,14 +50,14 @@ void a2p_log(int level, const char *message, ...)
     }
 
     if(level == A2P_LOG_REPEAT) fprintf(stderr, "\r");
-    fprintf(stderr, "avs2pipe [%s]: ", prefix);
+    fprintf(stderr, "avs2pipemod [%s]: ", prefix);
     vfprintf(stderr, message, args);
 
     va_end(args);
     if(level == A2P_LOG_ERROR) exit(2);
 }
 
-double a2p_gettime()
+double a2pm_gettime()
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
