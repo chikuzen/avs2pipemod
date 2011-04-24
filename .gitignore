@@ -24,3 +24,5 @@
 *.bz2
 *.xz
 *.lzma
+
+src/version.h
