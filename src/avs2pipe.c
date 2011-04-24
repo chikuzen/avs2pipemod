@@ -35,6 +35,7 @@
 #include "wave.h"
 
 #define BM_OUT_PAR_FRAMES 50
+#define Y4M_FRAME_HEADER_SIZE 6
 
 AVS_Clip *
 avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter)
@@ -169,10 +170,11 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     AVS_VideoFrame *frame;
     static const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
     const BYTE *buff; // BYTE from avisynth_c.h not windows headers
-    char * yuv_csp;
+    char *yuv_csp;
     size_t count, step;
-    int32_t w, h, f, p, i, pitch, h_uv, v_uv, np, k;
+    int32_t w, h, f, p, h_uv, v_uv, np, k;
     int32_t wrote, target;
+    char *wbuff;
     double start, end, elapsed;
 
     info = avs_get_video_info(clip);
@@ -263,6 +265,10 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     if(!avs_is_planar(info))
         a2p_log(A2P_LOG_ERROR, "colorspace handling failed. leaving...\n", 2);
 
+    wbuff = (char *)malloc(count + Y4M_FRAME_HEADER_SIZE);
+    if(!wbuff) 
+        a2p_log(A2P_LOG_ERROR, "out of memory!\n");
+
     if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
 
@@ -279,6 +285,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     fflush(stdout);
 
     // method from avs2yuv converted to c
+    setvbuf(stdout, wbuff, _IOFBF, sizeof(wbuff));
+
     target = info->num_frames;
     wrote = 0;
     for(f = 0; f < target; f++) {
@@ -288,12 +296,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
         for(p = 0; p < np; p++) {
             w = info->width >> (p ? h_uv : 0);
             h = info->height >> (p ? v_uv : 0);
-            pitch = avs_get_pitch_p(frame, planes[p]);
             buff = avs_get_read_ptr_p(frame, planes[p]);
-            for(i = 0; i < h; i++) {
-                step += fwrite(buff, sizeof(BYTE), w, stdout);
-                buff += pitch;
-            }
+            step += fwrite(buff, sizeof(BYTE), w * h, stdout);
         }
         // not sure release is needed, but it doesn't cause an error
         avs_release_frame(frame);
@@ -306,6 +310,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
         //    wrote, (100 * wrote) / target);
     }
     fflush(stdout); // clear buffers before we exit
+
+    free(wbuff);
 
     end = a2p_gettime();
     elapsed = end - start;
