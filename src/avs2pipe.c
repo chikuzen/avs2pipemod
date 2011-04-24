@@ -150,7 +150,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 
     fflush(stdout); // clear buffers before we exit
 
-    a2p_log(A2P_LOG_REPEAT, "finished, wrote %I64u seconds [%I64u%%].\n", 
+    a2p_log(A2P_LOG_REPEAT, "finished, wrote %.3f seconds [%I64u%%].\n", 
         1.0 * wrote / info->audio_samples_per_second, (100 * wrote) / target);
 
     free(buff);
