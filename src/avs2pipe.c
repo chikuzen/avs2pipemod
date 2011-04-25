@@ -35,7 +35,7 @@
 #include "wave.h"
 #include "version.h"
 
-#define BM_OUT_PAR_FRAMES 50
+#define BM_FRAMES_PAR_OUT 50
 #define Y4M_FRAME_HEADER_SIZE 6
 
 AVS_Clip *
@@ -420,7 +420,7 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
     do_info(clip, env, input);
 
     target = info->num_frames;
-    count = target / BM_OUT_PAR_FRAMES;
+    count = target / BM_FRAMES_PAR_OUT;
     parcent = 0;
     passed = 0;
 
@@ -429,7 +429,7 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
     start = a2pm_gettime();
 
     for(i = 0; i < count; i++) {
-        for(f = 0; f < BM_OUT_PAR_FRAMES; f++) {
+        for(f = 0; f < BM_FRAMES_PAR_OUT; f++) {
             frame = avs_get_frame(clip, passed);
             avs_release_frame(frame);
             passed++;
