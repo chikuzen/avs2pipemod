@@ -21,6 +21,11 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 enum A2pLogLevel {
     A2P_LOG_ERROR,
     A2P_LOG_WARNING,
@@ -30,6 +35,8 @@ enum A2pLogLevel {
 
 void a2p_log(int level, const char *message, ...);
 
-double a2pm_gettime(void);
+//double a2pm_gettime(void);
+
+int64_t a2pm_gettime(void);
 
 #endif // COMMON_H

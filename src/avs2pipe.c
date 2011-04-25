@@ -20,19 +20,19 @@
  *
  */
 
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include <io.h>
 #include <string.h>
+
+#include "common.h"
+#include "wave.h"
+
 #ifdef A2P_AVS26
     #include "avisynth26/avisynth_c.h"
 #else
     #include "avisynth25/avisynth_c.h"
 #endif
-#include "common.h"
-#include "wave.h"
+
 #include "version.h"
 
 #define BM_FRAMES_PAR_OUT 50
@@ -89,7 +89,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
     void *buff;
     size_t size, count, step;
     uint64_t i, wrote, target;
-    double start, end, elapsed;
+    int64_t start, end, elapsed;
 
     info = avs_get_video_info(clip);
 
@@ -158,7 +158,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 
     end = a2pm_gettime();
     elapsed = end - start;
-    a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec.\n", elapsed);
+    a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec.\n", elapsed / 1000.);
 
     if(wrote != target)
         a2p_log(A2P_LOG_ERROR, "only wrote %I64u of %I64u samples.\n", wrote, target);
@@ -176,7 +176,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     int32_t w, h, f, p, h_uv, v_uv, np, k;
     int32_t wrote, target;
     char *wbuff;
-    double start, end, elapsed;
+    int64_t start, end, elapsed;
 
     info = avs_get_video_info(clip);
 
@@ -323,7 +323,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
         wrote, (100 * wrote) / target);
 
     a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
-        elapsed, wrote / elapsed);
+        elapsed / 1000000.0, wrote * 1000000. / elapsed);
 
     if(wrote != target)
         a2p_log(A2P_LOG_ERROR, "only wrote %d of %d frames.\n", wrote, target);
@@ -410,7 +410,8 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
     AVS_VideoFrame *frame;
     int32_t f, i;
     int32_t passed, target, count, parcent;
-    double start, running, end, elapsed, fps;
+    int64_t start, running, end, elapsed;
+    double fps;
 
     info = avs_get_video_info(clip);
 
@@ -436,10 +437,10 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
         }
         running = a2pm_gettime();
         elapsed = running - start;
-        fps = passed / elapsed;
-        parcent = 100 * passed / target;
+        fps = passed * 1000000. / elapsed;
+        parcent = passed / target;
         a2p_log(A2P_LOG_REPEAT, "[elapsed %.3f sec] %d/%d frames [%d%%][%.3ffps]",
-                    elapsed, passed, target, parcent, fps);
+                    elapsed / 1000000., passed, target, parcent, fps);
     }
 
     while(passed < target) {
@@ -450,12 +451,12 @@ do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
 
     end = a2pm_gettime();
     elapsed = end - start;
-    fps = passed / elapsed;
+    fps = passed * 1000000. / elapsed;
 
     fprintf(stderr, "\n");
     a2p_log(A2P_LOG_INFO, "%d frames has passed [100%%][%.3ffps]\n", passed, fps);
     fprintf(stdout, "benchmark result: total elapsed time is %.3f sec [%.3ffps]\n",
-            elapsed, fps);
+            elapsed / 1000000., fps);
 
     if(passed != target)
         a2p_log(A2P_LOG_ERROR, "only passed %d of %d frames.\n", passed, target);

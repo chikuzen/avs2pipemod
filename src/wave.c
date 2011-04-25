@@ -18,7 +18,6 @@
  *
  */
 
-#include <stdlib.h>
 #include "common.h"
 #include "wave.h"
 

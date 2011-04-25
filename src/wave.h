@@ -24,8 +24,6 @@
 #ifndef WAVE_H
 #define WAVE_H
 
-#include <stdint.h>
-
 typedef enum WaveFormatType WaveFormatType;
 typedef struct WaveGuid WaveGuid;
 typedef struct WaveChunkHeader WaveChunkHeader;
