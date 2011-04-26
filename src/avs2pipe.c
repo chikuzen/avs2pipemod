@@ -173,7 +173,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     const BYTE *buff; // BYTE from avisynth_c.h not windows headers
     char *yuv_csp;
     size_t count, step;
-    int32_t w, h, f, p, h_uv, v_uv, np, k;
+    size_t psize[] = {0, 0, 0};
+    int32_t f, p, h_uv, v_uv, np, k;
     int32_t wrote, target;
     char *wbuff;
     int64_t start, end, elapsed;
@@ -280,6 +281,9 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info->width, info->height, yuv_csp, ip == 'p' ? "progressive" :
             ip == 't' ? "tff" : "bff");
 
+    for(p = 0; p < np; p++)
+        psize[p] = (size_t)((info->width >> (p ? h_uv : 0)) * (info->height >> (p ? v_uv : 0)));
+
     start = a2pm_gettime();
 
     // YUV4MPEG2 header http://linux.die.net/man/5/yuv4mpeg
@@ -297,10 +301,8 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
         frame = avs_get_frame(clip, f);
         fprintf(stdout, "FRAME\n");
         for(p = 0; p < np; p++) {
-            w = info->width >> (p ? h_uv : 0);
-            h = info->height >> (p ? v_uv : 0);
             buff = avs_get_read_ptr_p(frame, planes[p]);
-            step += fwrite(buff, sizeof(BYTE), w * h, stdout);
+            step += fwrite(buff, sizeof(BYTE), psize[p], stdout);
         }
         // not sure release is needed, but it doesn't cause an error
         avs_release_frame(frame);
@@ -345,7 +347,7 @@ do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
                 info->fps_numerator, info->fps_denominator);
         fprintf(stdout, "v:frames         %d\n", info->num_frames);
         fprintf(stdout, "v:duration[sec]  %.3f\n",
-                1.0 * info->num_frames * info->fps_denominator / info->fps_numerator);
+                (double)info->num_frames * info->fps_denominator / info->fps_numerator);
         fprintf(stdout, "v:image_type     %s\n",
                 !avs_is_field_based(info) ? "framebased" : "fieldbased");
         switch(info->image_type) {
