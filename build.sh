@@ -1,13 +1,20 @@
 #!/bin/bash
 
+usage()
+{
+cat << _EOT_
+    invalid arguments
+
+    usage : build.sh [option]
+      make    - compile binaries
+      clean   - delete binaries and src/version.h
+      package - compress binaries and .txt to zip (require 7z.exe)
+_EOT_
+exit
+}
+
 if [ $# -ne 1 ]; then
-    echo "  invalid arguments"
-    echo ""
-    echo "    usage : build.sh [option]"
-    echo "      make    - compile binaries"
-    echo "      clean   - delete binaries and src/version.h"
-    echo "      package - compress binaries and .txt to zip (require 7z.exe)"
-    exit
+    usage
 fi
 
 cd `dirname $0`
@@ -29,5 +36,8 @@ case $1 in
         ;;
     package )
         7z a -tzip avs2pipemod-`date -u +"%Y%m%d"` ./avs2pipe*.exe ./*.txt
+        ;;
+    *)
+        usage
         ;;
 esac
