@@ -165,7 +165,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 }
 
 void
-do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
+do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 {
     const AVS_VideoInfo *info;
     AVS_VideoFrame *frame;
@@ -174,7 +174,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     char *yuv_csp;
     size_t count, step;
     size_t psize[] = {0, 0, 0};
-    int32_t f, p, h_uv, v_uv, np, k;
+    int32_t f, p, uv_subsample, np, k;
     int32_t wrote, target;
     char *wbuff;
     int64_t start, end, elapsed;
@@ -221,9 +221,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info = avs_get_video_info(clip);
         case AVS_CS_YV24:
             yuv_csp = "444";
-            count = info->width * info->height * 3;
-            h_uv = 0;
-            v_uv = 0;
+            uv_subsample = 0;
             break;
         case AVS_CS_YUY2:
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv422.\n", 0);
@@ -231,25 +229,19 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info = avs_get_video_info(clip);
         case AVS_CS_YV16:
             yuv_csp = "422";
-            count = info->width * info->height * 2;
-            h_uv = 1;
-            v_uv = 0;
+            uv_subsample = 1;
             break;
         case AVS_CS_YV411:
             yuv_csp = "411";
-            count = info->width * info->height * 3 / 2;
-            h_uv = 2;
-            v_uv = 0;
+            uv_subsample = 2;
             break;
         case AVS_CS_Y8:
             yuv_csp = "mono";
-            count = info->width * info->height;
-            h_uv = 0;
-            v_uv = 0;
+            uv_subsample = 0;
             np = 1; // special case only one plane for mono
             break;
         default:
-        #endif
+    #endif
             if((info->pixel_type != AVS_CS_I420) && (info->pixel_type != AVS_CS_YV12)) {
                 a2p_log(A2P_LOG_INFO, "converting video to planar yuv420.\n", 0);
                 if(!(info->width % 2) && !(info->height % 2)) {
@@ -259,15 +251,15 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
                     a2p_log(A2P_LOG_ERROR, "invalid resolution. conversion failed.\n", 0);
             }
             yuv_csp = "420mpeg2"; //same as avisynth default subsampling type of yuv420
-            count = info->width * info->height * 3 / 2;
-            h_uv = 1;
-            v_uv = 1;
+            uv_subsample = 2;
     #ifdef A2P_AVS26
     }
     #endif
 
     if(!avs_is_planar(info))
         a2p_log(A2P_LOG_ERROR, "colorspace handling failed. leaving...\n", 2);
+
+    count = (info->width * info-> height * avs_bits_per_pixel(info)) >> 3;
 
     wbuff = (char *)malloc(count + Y4M_FRAME_HEADER_SIZE);
     if(!wbuff) 
@@ -282,7 +274,7 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             ip == 't' ? "tff" : "bff");
 
     for(p = 0; p < np; p++)
-        psize[p] = (size_t)((info->width >> (p ? h_uv : 0)) * (info->height >> (p ? v_uv : 0)));
+        psize[p] = (info->width * info->height) >> (p ? uv_subsample : 0);
 
     start = a2pm_gettime();
 
@@ -304,8 +296,9 @@ do_video(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             buff = avs_get_read_ptr_p(frame, planes[p]);
             step += fwrite(buff, sizeof(BYTE), psize[p], stdout);
         }
-        // not sure release is needed, but it doesn't cause an error
+
         avs_release_frame(frame);
+
         // fail early if there is a problem instead of end of input
         if(step != count)
             break;
@@ -704,13 +697,13 @@ main (int argc, char *argv[])
             do_audio(clip, env, 24);
             break;
         case A2P_ACTION_Y4MP:
-            do_video(clip, env, 'p');
+            do_y4m(clip, env, 'p');
             break;
         case A2P_ACTION_Y4MT:
-            do_video(clip, env, 't');
+            do_y4m(clip, env, 't');
             break;
         case A2P_ACTION_Y4MB:
-            do_video(clip, env, 'b');
+            do_y4m(clip, env, 'b');
             break;
         case A2P_ACTION_INFO:
             do_info(clip, env, input);

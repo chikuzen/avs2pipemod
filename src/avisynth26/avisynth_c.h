@@ -276,11 +276,15 @@ AVSC_INLINE int avs_is_tff(const AVS_VideoInfo * p)
 AVSC_INLINE int avs_bits_per_pixel(const AVS_VideoInfo * p) 
 { 
   switch (p->pixel_type) {
+      case AVS_CS_YV24:
       case AVS_CS_BGR24: return 24;
       case AVS_CS_BGR32: return 32;
+      case AVS_CS_YV16:
       case AVS_CS_YUY2:  return 16;
+      case AVS_CS_YV411:
       case AVS_CS_YV12:
       case AVS_CS_I420:  return 12;
+      case AVS_CS_Y8:    return 8;
       default:           return 0;
     }
 }
