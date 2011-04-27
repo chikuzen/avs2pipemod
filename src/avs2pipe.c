@@ -325,6 +325,82 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 }
 
 void
+do_packedraw(AVS_Clip *clip, AVS_ScriptEnvironment *env)
+{
+    const AVS_VideoInfo *info;
+    AVS_VideoFrame *frame;
+    const BYTE *buff; // BYTE from avisynth_c.h not windows headers
+    char *pix_fmt;
+    size_t count;
+    int32_t f;
+    int32_t wrote, target;
+    char *wbuff;
+    int64_t start, end, elapsed;
+
+    info = avs_get_video_info(clip);
+
+    if(!avs_has_video(info))
+        a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
+
+    switch(info->pixel_type) {
+        case AVS_CS_BGR32:
+            pix_fmt = "packed BGRA";
+            break;
+        case AVS_CS_BGR24:
+            pix_fmt = "packed BGR";
+            break;
+        case AVS_CS_YUY2:
+            pix_fmt = "YUYV";
+            break;
+        default:
+            a2p_log(A2P_LOG_ERROR, "invalid pixel_type in this mode.\n", 0);
+    }
+
+    count = (info->width * info-> height * avs_bits_per_pixel(info)) >> 3;
+
+    wbuff = (char *)malloc(count);
+    if(!wbuff) 
+        a2p_log(A2P_LOG_ERROR, "out of memory!\n");
+
+    if(_setmode(_fileno(stdout), _O_BINARY) == -1)
+        a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
+
+    a2p_log(A2P_LOG_INFO, "writing %d frames of %dx%d %s rawvideo.\n",
+            info->num_frames, info->width, info->height, pix_fmt);
+
+    start = a2pm_gettime();
+
+    setvbuf(stdout, wbuff, _IOFBF, sizeof(wbuff));
+
+    target = info->num_frames;
+    wrote = 0;
+
+    for(f = 0; f < target; f++) {
+        frame = avs_get_frame(clip, f);
+        buff = avs_get_read_ptr(frame);
+        fwrite(buff, sizeof(BYTE), count, stdout);
+        avs_release_frame(frame);
+        wrote++;
+    }
+
+    fflush(stdout);
+
+    free(wbuff);
+
+    end = a2pm_gettime();
+    elapsed = end - start;
+
+    a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n", 
+        wrote, (100 * wrote) / target);
+
+    a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
+        elapsed / 1000000.0, wrote * 1000000.0 / elapsed);
+
+    if(wrote != target)
+        a2p_log(A2P_LOG_ERROR, "only wrote %d of %d frames.\n", wrote, target);
+}
+
+void
 do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
 {
     const AVS_VideoInfo *info;
@@ -626,6 +702,7 @@ main (int argc, char *argv[])
         A2P_ACTION_Y4MP,
         A2P_ACTION_Y4MT,
         A2P_ACTION_Y4MB,
+        A2P_ACTION_PACKEDRAW,
         A2P_ACTION_INFO,
         A2P_ACTION_X264BD,
         A2P_ACTION_BENCHMARK,
@@ -647,6 +724,8 @@ main (int argc, char *argv[])
             action = A2P_ACTION_Y4MT;
         else if(strcmp(argv[1], "y4mb") == 0)
             action = A2P_ACTION_Y4MB;
+        else if(strcmp(argv[1], "packedraw") == 0)
+            action = A2P_ACTION_PACKEDRAW;
         else if(strcmp(argv[1], "info") == 0)
             action = A2P_ACTION_INFO;
         else if(strcmp(argv[1], "x264bd") == 0)
@@ -668,16 +747,18 @@ main (int argc, char *argv[])
                 "  %s\n"
                 "build on %s\n\n"
                 "Usage: %s [only one option] input.avs\n"
-                "   audio  -  output wav extensible format audio to stdout.\n"
-                "   aud16  -  convert bit depth of audio to 16bit integer,\n"
-                "            and output wav extensible format audio to stdout.\n"
-                "   aud24  -  convert bit depth of audio to 24bit integer,\n"
-                "            and output wav extensible format audio to stdout.\n"
-                "   y4mp   - output yuv4mpeg2 format video to stdout as progressive.\n"
-                "   y4mt   - output yuv4mpeg2 format video to stdout as tff interlaced.\n"
-                "   y4mb   - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
-                "   info   - output information about aviscript clip.\n"
-                "   x264bd - suggest x264 arguments for bluray disc encoding.\n"
+                "   audio     - output wav extensible format audio to stdout.\n"
+                "   aud16     - convert bit depth of audio to 16bit integer,\n"
+                "               and output wav extensible format audio to stdout.\n"
+                "   aud24     - convert bit depth of audio to 24bit integer,\n"
+                "               and output wav extensible format audio to stdout.\n"
+                "   y4mp      - output yuv4mpeg2 format video to stdout as progressive.\n"
+                "   y4mt      - output yuv4mpeg2 format video to stdout as tff interlaced.\n"
+                "   y4mb      - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
+                "   packedraw - output rawvideo to stdout.\n"
+                "               this mode accepts only packed format(RGB32|RGB24|YUY2).\n"
+                "   info      - output information about aviscript clip.\n"
+                "   x264bd    - suggest x264 arguments for bluray disc encoding.\n"
                 "   benchmark - do benchmark and output results to stdout.\n"
                 , A2PM_VERSION, A2PM_DATE_OF_BUILD, argv[0]);
         exit(2);
@@ -704,6 +785,9 @@ main (int argc, char *argv[])
             break;
         case A2P_ACTION_Y4MB:
             do_y4m(clip, env, 'b');
+            break;
+        case A2P_ACTION_PACKEDRAW:
+            do_packedraw(clip, env);
             break;
         case A2P_ACTION_INFO:
             do_info(clip, env, input);
