@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2010-2011 Chris Beswick <chris.beswick@gmail.com>
  *
  * YUV4MPEG2 output inspired by Avs2YUV by Loren Merritt
@@ -37,6 +37,7 @@
 
 #define BM_FRAMES_PAR_OUT 50
 #define Y4M_FRAME_HEADER_SIZE 6
+#define BUFSIZE_OF_STDOUT 262144 //The optimum value might be smaller than this.
 
 AVS_Clip *
 avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter)
@@ -143,14 +144,14 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
             break;
 
         wrote += count;
-        //a2p_log(A2P_LOG_REPEAT, "written %lld seconds [%lld%%]... ", 
+        //a2p_log(A2P_LOG_REPEAT, "written %lld seconds [%lld%%]... ",
         //    wrote / info->audio_samples_per_second,
         //    (100 * wrote) / target);
     }
 
     fflush(stdout); // clear buffers before we exit
 
-    a2p_log(A2P_LOG_REPEAT, "finished, wrote %.3f seconds [%I64u%%].\n", 
+    a2p_log(A2P_LOG_REPEAT, "finished, wrote %.3f seconds [%I64u%%].\n",
             (double)wrote / info->audio_samples_per_second, (100 * wrote) / target);
 
     free(buff);
@@ -171,12 +172,10 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     AVS_VideoFrame *frame;
     static const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
     const BYTE *buff; // BYTE from avisynth_c.h not windows headers
-    char *yuv_csp;
+    char *yuv_csp = NULL;
     size_t count, step;
-    size_t psize[] = {0, 0, 0};
-    int32_t f, p, uv_subsample, np, k;
+    int32_t f, p, i, h_uv, v_uv, w, h, pitch, np, k;
     int32_t wrote, target;
-    char *wbuff;
     int64_t start, end, elapsed;
 
     info = avs_get_video_info(clip);
@@ -210,8 +209,8 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     // Number of planes normally 3;
     np = 3;
 
-	// Setup Correct Colorspace Handling
-	// Thanks to Chikuzen @ Doom9 Forums
+    // Setup Correct Colorspace Handling
+    // Thanks to Chikuzen @ Doom9 Forums
     #ifdef A2P_AVS26
     switch(info->pixel_type) {
         case AVS_CS_BGR32:
@@ -221,7 +220,8 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info = avs_get_video_info(clip);
         case AVS_CS_YV24:
             yuv_csp = "444";
-            uv_subsample = 0;
+            h_uv = 0;
+            v_uv = 0;
             break;
         case AVS_CS_YUY2:
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv422.\n", 0);
@@ -229,15 +229,18 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info = avs_get_video_info(clip);
         case AVS_CS_YV16:
             yuv_csp = "422";
-            uv_subsample = 1;
+            h_uv = 1;
+            v_uv = 0;
             break;
         case AVS_CS_YV411:
             yuv_csp = "411";
-            uv_subsample = 2;
+            h_uv = 2;
+            v_uv = 0;
             break;
         case AVS_CS_Y8:
             yuv_csp = "mono";
-            uv_subsample = 0;
+            h_uv = 0;
+            v_uv = 0;
             np = 1; // special case only one plane for mono
             break;
         default:
@@ -251,7 +254,8 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
                     a2p_log(A2P_LOG_ERROR, "invalid resolution. conversion failed.\n", 0);
             }
             yuv_csp = "420mpeg2"; //same as avisynth default subsampling type of yuv420
-            uv_subsample = 2;
+            h_uv = 1;
+            v_uv = 1;
     #ifdef A2P_AVS26
     }
     #endif
@@ -261,10 +265,6 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
 
     count = (info->width * info-> height * avs_bits_per_pixel(info)) >> 3;
 
-    wbuff = (char *)malloc(count + Y4M_FRAME_HEADER_SIZE);
-    if(!wbuff) 
-        a2p_log(A2P_LOG_ERROR, "out of memory!\n");
-
     if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
 
@@ -272,9 +272,6 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             info->num_frames, info->fps_numerator, info->fps_denominator,
             info->width, info->height, yuv_csp, ip == 'p' ? "progressive" :
             ip == 't' ? "tff" : "bff");
-
-    for(p = 0; p < np; p++)
-        psize[p] = (info->width * info->height) >> (p ? uv_subsample : 0);
 
     start = a2pm_gettime();
 
@@ -284,19 +281,25 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     fflush(stdout);
 
     // method from avs2yuv converted to c
-    setvbuf(stdout, wbuff, _IOFBF, sizeof(wbuff));
+    setvbuf(stdout, NULL, _IOFBF, BUFSIZE_OF_STDOUT);
 
     target = info->num_frames;
     wrote = 0;
+
     for(f = 0; f < target; f++) {
         step = 0;
         frame = avs_get_frame(clip, f);
         fprintf(stdout, "FRAME\n");
         for(p = 0; p < np; p++) {
+            w = info->width >> (p ? h_uv : 0);
+            h = info->height >> (p ? v_uv : 0);
+            pitch = avs_get_pitch_p(frame, planes[p]);
             buff = avs_get_read_ptr_p(frame, planes[p]);
-            step += fwrite(buff, sizeof(BYTE), psize[p], stdout);
+            for(i = 0; i < h; i++) {
+                step += fwrite(buff, sizeof(BYTE), w, stdout);
+                buff += pitch;
+            }
         }
-
         avs_release_frame(frame);
 
         // fail early if there is a problem instead of end of input
@@ -304,17 +307,16 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
             break;
 
         wrote++;
-        //a2p_log(A2P_LOG_REPEAT, "written %d frames [%d%%]... ", 
+        //a2p_log(A2P_LOG_REPEAT, "written %d frames [%d%%]... ",
         //    wrote, (100 * wrote) / target);
     }
-    fflush(stdout); // clear buffers before we exit
 
-    free(wbuff);
+    fflush(stdout); // clear buffers before we exit
 
     end = a2pm_gettime();
     elapsed = end - start;
 
-    a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n", 
+    a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n",
         wrote, (100 * wrote) / target);
 
     a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
@@ -331,10 +333,9 @@ do_packedraw(AVS_Clip *clip, AVS_ScriptEnvironment *env)
     AVS_VideoFrame *frame;
     const BYTE *buff; // BYTE from avisynth_c.h not windows headers
     char *pix_fmt;
-    size_t count;
-    int32_t f;
+    size_t count, step;
+    int32_t pitch, f, w, h, i;
     int32_t wrote, target;
-    char *wbuff;
     int64_t start, end, elapsed;
 
     info = avs_get_video_info(clip);
@@ -344,23 +345,26 @@ do_packedraw(AVS_Clip *clip, AVS_ScriptEnvironment *env)
 
     switch(info->pixel_type) {
         case AVS_CS_BGR32:
-            pix_fmt = "packed BGRA";
+            pix_fmt = "BGRA";
             break;
         case AVS_CS_BGR24:
-            pix_fmt = "packed BGR";
+            pix_fmt = "BGR";
             break;
         case AVS_CS_YUY2:
             pix_fmt = "YUYV";
             break;
+        #ifdef A2P_AVS26
+        case AVS_CS_Y8:
+            pix_fmt = "Y8(gray)";
+            break;
+        #endif
         default:
             a2p_log(A2P_LOG_ERROR, "invalid pixel_type in this mode.\n", 0);
     }
 
-    count = (info->width * info-> height * avs_bits_per_pixel(info)) >> 3;
-
-    wbuff = (char *)malloc(count);
-    if(!wbuff) 
-        a2p_log(A2P_LOG_ERROR, "out of memory!\n");
+    w = info->width * avs_bits_per_pixel(info) >> 3;
+    h = info->height;
+    count = w * h;
 
     if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
@@ -368,29 +372,35 @@ do_packedraw(AVS_Clip *clip, AVS_ScriptEnvironment *env)
     a2p_log(A2P_LOG_INFO, "writing %d frames of %dx%d %s rawvideo.\n",
             info->num_frames, info->width, info->height, pix_fmt);
 
-    start = a2pm_gettime();
-
-    setvbuf(stdout, wbuff, _IOFBF, sizeof(wbuff));
-
     target = info->num_frames;
     wrote = 0;
 
+    setvbuf(stdout, NULL, _IOFBF, BUFSIZE_OF_STDOUT);
+
+    start = a2pm_gettime();
+
     for(f = 0; f < target; f++) {
+        step = 0;
         frame = avs_get_frame(clip, f);
+        pitch = avs_get_pitch(frame);
         buff = avs_get_read_ptr(frame);
-        fwrite(buff, sizeof(BYTE), count, stdout);
+        for(i = 0; i < h; i++) {
+            step += fwrite(buff, sizeof(BYTE), w, stdout);
+            buff += pitch;
+        }
+
         avs_release_frame(frame);
+
+        if(step != count)
+            break;
+
         wrote++;
     }
-
-    fflush(stdout);
-
-    free(wbuff);
 
     end = a2pm_gettime();
     elapsed = end - start;
 
-    a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n", 
+    a2p_log(A2P_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n",
         wrote, (100 * wrote) / target);
 
     a2p_log(A2P_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
@@ -641,7 +651,7 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env)
             keyint = 0;
             break;
     }
-	
+
     // Ensure video is supported... this is messy
     // and set any special case arguments.
     // res << 16           | fps << 8  | avs_is_field_based
@@ -706,7 +716,7 @@ main (int argc, char *argv[])
         A2P_ACTION_INFO,
         A2P_ACTION_X264BD,
         A2P_ACTION_BENCHMARK,
-        A2P_ACTION_NOTHING    
+        A2P_ACTION_NOTHING
     } action;
 
     action = A2P_ACTION_NOTHING;
@@ -736,7 +746,7 @@ main (int argc, char *argv[])
     }
 
     if(action == A2P_ACTION_NOTHING) {
-       
+
         #ifdef A2P_AVS26
             fprintf(stderr, "avs2pipemod for AviSynth 2.6.0 Alpha 2");
         #else
