@@ -166,7 +166,7 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 }
 
 void
-do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
+do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y)
 {
     const AVS_VideoInfo *info;
     AVS_VideoFrame *frame;
@@ -268,16 +268,17 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip)
     if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
 
-    a2p_log(A2P_LOG_INFO, "writing %d frames of %d/%d fps, %dx%d YUV%s %s video.\n",
+    a2p_log(A2P_LOG_INFO, "writing %d frames of %d/%d fps, %dx%d, sar %d:%d YUV%s %s video.\n",
             info->num_frames, info->fps_numerator, info->fps_denominator,
-            info->width, info->height, yuv_csp, ip == 'p' ? "progressive" :
-            ip == 't' ? "tff" : "bff");
+            info->width, info->height, sar_x, sar_y, yuv_csp,
+            ip == 'p' ? "progressive" : ip == 't' ? "tff" : "bff");
 
     start = a2pm_gettime();
 
     // YUV4MPEG2 header http://linux.die.net/man/5/yuv4mpeg
-    fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A0:0 C%s\n", info->width,
-            info->height, info->fps_numerator, info->fps_denominator, ip, yuv_csp);
+    fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
+            info->width, info->height, info->fps_numerator,
+            info->fps_denominator, ip, sar_x, sar_y, yuv_csp);
     fflush(stdout);
 
     // method from avs2yuv converted to c
@@ -692,7 +693,8 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env)
             break;
     }
 
-    fprintf(stdout, "--weightp 1 --bframes 3 --nal-hrd vbr --vbv-maxrate 15000"
+    fprintf(stdout,
+            "--weightp 1 --bframes 3 --nal-hrd vbr --vbv-maxrate 15000"
             " --vbv-bufsize 30000 --level 4.1 --keyint %d --b-pyramid strict"
             " --open-gop bluray --slices 4 --ref %d %s --aud --colorprim "
             "\"%s\" --transfer \"%s\" --colormatrix \"%s\"",
@@ -704,7 +706,8 @@ main (int argc, char *argv[])
 {
     AVS_ScriptEnvironment *env;
     AVS_Clip *clip;
-    char * input;
+    char *input;
+    int sar_x = 0, sar_y = 0;
     enum {
         A2P_ACTION_AUDIO,
         A2P_ACTION_AUD16,
@@ -721,28 +724,39 @@ main (int argc, char *argv[])
 
     action = A2P_ACTION_NOTHING;
 
-    if(argc == 3) {
-        if(strcmp(argv[1], "audio") == 0)
+    if(argc == 3 || argc == 4) {
+        if(!strcmp(argv[1], "audio"))
             action = A2P_ACTION_AUDIO;
-        else if(strcmp(argv[1], "aud16") == 0)
+        else if(!strcmp(argv[1], "aud16"))
             action = A2P_ACTION_AUD16;
-        else if(strcmp(argv[1], "aud24") == 0)
+        else if(!strcmp(argv[1], "aud24"))
             action = A2P_ACTION_AUD24;
-        else if(strcmp(argv[1], "y4mp") == 0)
+        else if(!strcmp(argv[1], "y4mp"))
             action = A2P_ACTION_Y4MP;
-        else if(strcmp(argv[1], "y4mt") == 0)
+        else if(!strcmp(argv[1], "y4mt"))
             action = A2P_ACTION_Y4MT;
-        else if(strcmp(argv[1], "y4mb") == 0)
+        else if(!strcmp(argv[1], "y4mb"))
             action = A2P_ACTION_Y4MB;
-        else if(strcmp(argv[1], "packedraw") == 0)
+        else if(!strcmp(argv[1], "packedraw"))
             action = A2P_ACTION_PACKEDRAW;
-        else if(strcmp(argv[1], "info") == 0)
+        else if(!strcmp(argv[1], "info"))
             action = A2P_ACTION_INFO;
-        else if(strcmp(argv[1], "x264bd") == 0)
+        else if(!strcmp(argv[1], "x264bd"))
             action = A2P_ACTION_X264BD;
-        else if(strcmp(argv[1], "benchmark") == 0)
+        else if(!strcmp(argv[1], "benchmark"))
             action = A2P_ACTION_BENCHMARK;
-        input = argv[2];
+    }
+
+    if(argc == 4) {
+        if(action == A2P_ACTION_Y4MP ||
+           action == A2P_ACTION_Y4MT ||
+           action == A2P_ACTION_Y4MB) {
+            sscanf(argv[2], "%d:%d", &sar_x, &sar_y);
+            sar_x = abs(sar_x);
+            sar_y = abs(sar_y);
+                if(!(sar_x * sar_y) && (sar_x + sar_y))
+                    action = A2P_ACTION_NOTHING;
+        } else action = A2P_ACTION_NOTHING;
     }
 
     if(action == A2P_ACTION_NOTHING) {
@@ -756,15 +770,18 @@ main (int argc, char *argv[])
         fprintf(stderr,
                 "  %s\n"
                 "build on %s\n\n"
-                "Usage: %s [only one option] input.avs\n"
+                "Usage: %s [option] input.avs\n"
                 "   audio     - output wav extensible format audio to stdout.\n"
                 "   aud16     - convert bit depth of audio to 16bit integer,\n"
                 "               and output wav extensible format audio to stdout.\n"
                 "   aud24     - convert bit depth of audio to 24bit integer,\n"
                 "               and output wav extensible format audio to stdout.\n"
-                "   y4mp      - output yuv4mpeg2 format video to stdout as progressive.\n"
-                "   y4mt      - output yuv4mpeg2 format video to stdout as tff interlaced.\n"
-                "   y4mb      - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
+                "   y4mp [sar_x:sar_y  --  default 0:0]\n"
+                "             - output yuv4mpeg2 format video to stdout as progressive.\n"
+                "   y4mt [sar_x:sar_y  --  default 0:0]\n"
+                "             - output yuv4mpeg2 format video to stdout as tff interlaced.\n"
+                "   y4mb [sar_x:sar_y  --  default 0:0]\n"
+                "             - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
                 "   packedraw - output rawvideo to stdout.\n"
                 "               this mode accepts only packed format(RGB32|RGB24|YUY2).\n"
                 "   info      - output information about aviscript clip.\n"
@@ -774,6 +791,7 @@ main (int argc, char *argv[])
         exit(2);
     }
 
+    input = argv[3] ? argv[3] : argv[2];
     env = avs_create_script_environment(AVISYNTH_INTERFACE_VERSION);
     clip = avisynth_source(input, env);
 
@@ -788,13 +806,13 @@ main (int argc, char *argv[])
             do_audio(clip, env, 24);
             break;
         case A2P_ACTION_Y4MP:
-            do_y4m(clip, env, 'p');
+            do_y4m(clip, env, 'p', sar_x, sar_y);
             break;
         case A2P_ACTION_Y4MT:
-            do_y4m(clip, env, 't');
+            do_y4m(clip, env, 't', sar_x, sar_y);
             break;
         case A2P_ACTION_Y4MB:
-            do_y4m(clip, env, 'b');
+            do_y4m(clip, env, 'b', sar_x, sar_y);
             break;
         case A2P_ACTION_PACKEDRAW:
             do_packedraw(clip, env);
