@@ -127,11 +127,9 @@ avisynth_source(char *file, AVS_ScriptEnvironment *env)
 }
 
 void
-do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
+do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit, int raw)
 {
     const AVS_VideoInfo *info;
-    WaveRiffHeader *header;
-    WaveFormatType format;
     void *buff;
     size_t size, count, step;
     uint64_t i, wrote, target;
@@ -149,13 +147,14 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
         info = avs_get_video_info(clip);
     }
 
-    if(info->sample_type == AVS_SAMPLE_FLOAT)
-        format = WAVE_FORMAT_IEEE_FLOAT;
-    else
-        format = WAVE_FORMAT_PCM;
-
     if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n", 0);
+
+    count = info->audio_samples_per_second;
+    wrote = 0;
+    target = info->num_audio_samples;
+    size = avs_bytes_per_channel_sample(info) * info->nchannels;
+    buff = malloc(count * size);
 
     a2p_log(A2P_LOG_INFO, "writing %.3f seconds of %d Hz, %d channel audio.\n",
             (double)info->num_audio_samples / info->audio_samples_per_second,
@@ -165,18 +164,17 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
 
     start = a2pm_gettime();
 
-    header = wave_create_riff_header(format, info->nchannels,
-                                     info->audio_samples_per_second,
-                                     avs_bytes_per_channel_sample(info),
-                                     info->num_audio_samples);
-
-    fwrite(header, sizeof(*header), 1, stdout);
-
-    count = info->audio_samples_per_second;
-    wrote = 0;
-    target = info->num_audio_samples;
-    size = avs_bytes_per_channel_sample(info) * info->nchannels;
-    buff = malloc(count * size);
+    if(!raw) {
+        WaveFormatType format = (info->sample_type == AVS_SAMPLE_FLOAT) ?
+                                WAVE_FORMAT_IEEE_FLOAT :
+                                WAVE_FORMAT_PCM;
+        WaveRiffHeader *header = wave_create_riff_header(format, info->nchannels,
+                                                         info->audio_samples_per_second,
+                                                         avs_bytes_per_channel_sample(info),
+                                                         info->num_audio_samples);
+        fwrite(header, sizeof(*header), 1, stdout);
+        free(header);
+    }
 
     for (i = 0; i < target; i += count) {
         if(target - i < count)
@@ -202,7 +200,6 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
             (double)wrote / info->audio_samples_per_second, (100 * wrote) / target);
 
     free(buff);
-    free(header);
 
     end = a2pm_gettime();
     elapsed = end - start;
@@ -323,16 +320,16 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
             info->width, info->height, sar_x, sar_y, yuv_csp,
             ip == 'p' ? "progressive" : ip == 't' ? "tff" : "bff");
 
+    setvbuf(stdout, NULL, _IOFBF, BUFSIZE_OF_STDOUT);
+
     start = a2pm_gettime();
 
     // YUV4MPEG2 header http://linux.die.net/man/5/yuv4mpeg
     fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
             info->width, info->height, info->fps_numerator,
             info->fps_denominator, ip, sar_x, sar_y, yuv_csp);
-    fflush(stdout);
 
     // method from avs2yuv converted to c
-    setvbuf(stdout, NULL, _IOFBF, BUFSIZE_OF_STDOUT);
 
     target = info->num_frames;
     wrote = 0;
@@ -762,6 +759,9 @@ main (int argc, char *argv[])
         A2P_ACTION_AUDIO,
         A2P_ACTION_AUD16,
         A2P_ACTION_AUD24,
+        A2P_ACTION_RAWAUDIO,
+        A2P_ACTION_RAWAUD16,
+        A2P_ACTION_RAWAUD24,
         A2P_ACTION_Y4MP,
         A2P_ACTION_Y4MT,
         A2P_ACTION_Y4MB,
@@ -781,6 +781,12 @@ main (int argc, char *argv[])
             action = A2P_ACTION_AUD16;
         else if(!strcmp(argv[1], "aud24"))
             action = A2P_ACTION_AUD24;
+        else if(!strcmp(argv[1],"rawaudio"))
+            action = A2P_ACTION_RAWAUDIO;
+        else if(!strcmp(argv[1],"rawaud16"))
+            action = A2P_ACTION_RAWAUD16;
+        else if(!strcmp(argv[1],"rawaud24"))
+            action = A2P_ACTION_RAWAUD24;
         else if(!strcmp(argv[1], "y4mp"))
             action = A2P_ACTION_Y4MP;
         else if(!strcmp(argv[1], "y4mt"))
@@ -826,6 +832,11 @@ main (int argc, char *argv[])
                 "               and output wav extensible format audio to stdout.\n"
                 "   aud24     - convert bit depth of audio to 24bit integer,\n"
                 "               and output wav extensible format audio to stdout.\n"
+                "   rawaudio  - output raw pcm audio to stdout.\n"
+                "   rawaud16  - convert bit depth of audio to 16bit integer,\n"
+                "               and output raw pcm audio to stdout.\n"
+                "   rawaud24  - convert bit depth of audio to 24bit integer,\n"
+                "               and output raw pcm audio to stdout.\n"
                 "   y4mp [sar_x:sar_y  --  default 0:0]\n"
                 "             - output yuv4mpeg2 format video to stdout as progressive.\n"
                 "   y4mt [sar_x:sar_y  --  default 0:0]\n"
@@ -853,13 +864,22 @@ main (int argc, char *argv[])
 
     switch(action) {
         case A2P_ACTION_AUDIO:
-            do_audio(clip, env, 0);
+            do_audio(clip, env, 0, 0);
             break;
         case A2P_ACTION_AUD16:
-            do_audio(clip, env, 16);
+            do_audio(clip, env, 16, 0);
             break;
         case A2P_ACTION_AUD24:
-            do_audio(clip, env, 24);
+            do_audio(clip, env, 24, 0);
+            break;
+        case A2P_ACTION_RAWAUDIO:
+            do_audio(clip, env, 0, 1);
+            break;
+        case A2P_ACTION_RAWAUD16:
+            do_audio(clip, env, 16, 1);
+            break;
+        case A2P_ACTION_RAWAUD24:
+            do_audio(clip, env, 24, 1);
             break;
         case A2P_ACTION_Y4MP:
             do_y4m(clip, env, 'p', sar_x, sar_y);
