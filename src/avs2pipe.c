@@ -37,7 +37,9 @@
 
 #define BM_FRAMES_PAR_OUT 50
 #define Y4M_FRAME_HEADER_SIZE 6
-#define BUFSIZE_OF_STDOUT 262144 //The optimum value might be smaller than this.
+#define BUFSIZE_OF_STDOUT 262144 // 256kB. The optimum value might be smaller than this.
+#define A2PM_BT601 "Rec601"
+#define A2PM_BT709 "Rec709"
 
 AVS_Clip *
 avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter)
@@ -49,9 +51,52 @@ avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter)
 
     val_array = avs_new_value_array(&val_clip, 1);
     val_return = avs_invoke(env, filter, val_array, 0);
+    if(avs_is_error(val_return))
+        a2p_log(A2P_LOG_ERROR, "%s failed\n", filter);
     clip = avs_take_clip(val_return, env);
 
     avs_release_value(val_array);
+    avs_release_value(val_clip);
+    avs_release_value(val_return);
+
+    return clip;
+}
+
+//inspipred by x264/input/avs.c by Steven Walters.
+AVS_Clip *
+avisynth_filter_yuv2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter, int interlaced)
+{
+    AVS_Value val_clip = avs_new_value_clip(clip);
+    avs_release_clip(clip);
+
+    const char *arg_name[2] = {NULL, "interlaced"};
+    AVS_Value val_array[2] = {val_clip, avs_new_value_bool(interlaced)};
+    AVS_Value val_return = avs_invoke(env, filter, avs_new_value_array(val_array, 2), arg_name);
+    if(avs_is_error(val_return))
+        a2p_log(A2P_LOG_ERROR, "%s failed.\n", filter);
+
+    clip = avs_take_clip(val_return, env);
+
+    avs_release_value(val_clip);
+    avs_release_value(val_return);
+
+    return clip;
+}
+
+AVS_Clip *
+avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter, const char *matrix, int interlaced)
+{
+    AVS_Value val_clip = avs_new_value_clip(clip);
+    avs_release_clip(clip);
+
+    const char *arg_name[3] = {NULL, "matrix", "interlaced"};
+    AVS_Value val_array[3] = {val_clip, avs_new_value_string(matrix), avs_new_value_bool(interlaced)};
+    AVS_Value val_return = avs_invoke(env, filter, avs_new_value_array(val_array, 3), arg_name);
+    if(avs_is_error(val_return))
+        a2p_log(A2P_LOG_ERROR, "%s failed.\n", filter);
+
+    clip = avs_take_clip(val_return, env);
+
     avs_release_value(val_clip);
     avs_release_value(val_return);
 
@@ -116,6 +161,8 @@ do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, int bit)
             (double)info->num_audio_samples / info->audio_samples_per_second,
             info->audio_samples_per_second, info->nchannels);
 
+    setvbuf(stdout, NULL, _IOFBF, BUFSIZE_OF_STDOUT);
+
     start = a2pm_gettime();
 
     header = wave_create_riff_header(format, info->nchannels,
@@ -172,7 +219,8 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
     AVS_VideoFrame *frame;
     static const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
     const BYTE *buff; // BYTE from avisynth_c.h not windows headers
-    char *yuv_csp = NULL;
+    const char *matrix;
+    char *yuv_csp;
     size_t count, step;
     int32_t f, p, i, h_uv, v_uv, w, h, pitch, np, k;
     int32_t wrote, target;
@@ -208,7 +256,7 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
 
     // Number of planes normally 3;
     np = 3;
-
+    matrix = (info->height < 720) ? A2PM_BT601 : A2PM_BT709;
     // Setup Correct Colorspace Handling
     // Thanks to Chikuzen @ Doom9 Forums
     #ifdef A2P_AVS26
@@ -216,7 +264,7 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
         case AVS_CS_BGR32:
         case AVS_CS_BGR24:
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv444.\n", 0);
-            clip = avisynth_filter(clip, env, "ConvertToYV24");
+            clip = avisynth_filter_rgb2yuv(clip, env, "ConvertToYV24", matrix, 0);
             info = avs_get_video_info(clip);
         case AVS_CS_YV24:
             yuv_csp = "444";
@@ -225,7 +273,7 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
             break;
         case AVS_CS_YUY2:
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv422.\n", 0);
-            clip = avisynth_filter(clip, env, "ConvertToYV16");
+            clip = avisynth_filter_yuv2yuv(clip, env, "ConvertToYV16", 0);
             info = avs_get_video_info(clip);
         case AVS_CS_YV16:
             yuv_csp = "422";
@@ -247,12 +295,14 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
     #endif
             if((info->pixel_type != AVS_CS_I420) && (info->pixel_type != AVS_CS_YV12)) {
                 a2p_log(A2P_LOG_INFO, "converting video to planar yuv420.\n", 0);
-                if(!(info->width % 2) && !(info->height % 2)) {
-                    clip = avisynth_filter(clip, env, "ConvertToYV12");
-                    info = avs_get_video_info(clip);
-                } else
-                    a2p_log(A2P_LOG_ERROR, "invalid resolution. conversion failed.\n", 0);
+                if(info->width & 1 || info->height & 1 || (ip != 'p' && info->height % 4))
+                    a2p_log(A2P_LOG_ERROR, "invalid resolution, converting failed.\n");
+                clip = avs_is_rgb(info) ?
+                    avisynth_filter_rgb2yuv(clip, env, "ConvertToYV12", matrix, ip == 'p' ? 0 : 1) :
+                    avisynth_filter_yuv2yuv(clip, env, "ConvertToYV12", ip == 'p' ? 0 : 1);
+                info = avs_get_video_info(clip);
             }
+
             yuv_csp = "420mpeg2"; //same as avisynth default subsampling type of yuv420
             h_uv = 1;
             v_uv = 1;
@@ -263,7 +313,7 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
     if(!avs_is_planar(info))
         a2p_log(A2P_LOG_ERROR, "colorspace handling failed. leaving...\n", 2);
 
-    count = (info->width * info-> height * avs_bits_per_pixel(info)) >> 3;
+    count = (info->width * info->height * avs_bits_per_pixel(info)) >> 3;
 
     if(_setmode(_fileno(stdout), _O_BINARY) == -1)
         a2p_log(A2P_LOG_ERROR, "cannot switch stdout to binary mode.\n");
@@ -288,9 +338,9 @@ do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, char ip, int sar_x, int sar_y
     wrote = 0;
 
     for(f = 0; f < target; f++) {
+        fprintf(stdout, "FRAME\n");
         step = 0;
         frame = avs_get_frame(clip, f);
-        fprintf(stdout, "FRAME\n");
         for(p = 0; p < np; p++) {
             w = info->width >> (p ? h_uv : 0);
             h = info->height >> (p ? v_uv : 0);
@@ -783,10 +833,16 @@ main (int argc, char *argv[])
                 "   y4mb [sar_x:sar_y  --  default 0:0]\n"
                 "             - output yuv4mpeg2 format video to stdout as bff interlaced.\n"
                 "   packedraw - output rawvideo to stdout.\n"
+                #ifdef A2P_AVS26
+                "               this mode accepts only packed format(RGB32|RGB24|YUY2|Y8).\n"
+                #else
                 "               this mode accepts only packed format(RGB32|RGB24|YUY2).\n"
+                #endif
                 "   info      - output information about aviscript clip.\n"
                 "   x264bd    - suggest x264 arguments for bluray disc encoding.\n"
                 "   benchmark - do benchmark and output results to stdout.\n"
+                "\n"
+                "note : in yuv4mpeg2 output modes, RGB input that has 720pix height or more will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
                 , A2PM_VERSION, A2PM_DATE_OF_BUILD, argv[0]);
         exit(2);
     }
