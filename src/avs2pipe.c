@@ -744,7 +744,6 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, struct params params)
             sar = "";
             break;
     }
-
     // See http://avisynth.org/mediawiki/FPS
     // fps_numerator << 16 | fps_denominator
     // 0000 0000 0000 0000   0000 0000  0000 0000
@@ -890,8 +889,11 @@ struct params parse_opts(int argc, char **argv, struct params params)
 
             case 'x':
                 params.action = A2P_ACTION_X264BD;
-                params.ip = (strncmp(optarg, "tff", 3)) ? 't' :
-                            (strncmp(optarg, "bff", 3)) ? 'b' : 'p';
+                if(optarg)
+                {
+                    params.ip = (strncmp(optarg, "tff", 3)) ? 't' :
+                                (strncmp(optarg, "bff", 3)) ? 'b' : 'p';
+                }
                 break;
 
             case 'B':
