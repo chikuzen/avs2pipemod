@@ -891,8 +891,8 @@ struct params parse_opts(int argc, char **argv, struct params params)
                 params.action = A2P_ACTION_X264BD;
                 if(optarg)
                 {
-                    params.ip = (strncmp(optarg, "tff", 3)) ? 't' :
-                                (strncmp(optarg, "bff", 3)) ? 'b' : 'p';
+                    params.ip = (!strncmp(optarg, "tff", 3)) ? 't' :
+                                (!strncmp(optarg, "bff", 3)) ? 'b' : 'p';
                 }
                 break;
 
