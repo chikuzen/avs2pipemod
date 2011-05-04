@@ -18,8 +18,6 @@
  *
  */
 
-#include <sys/timeb.h>
-#include <time.h>
 #include "common.h"
 
 void a2p_log(int level, const char *message, ...)
@@ -52,11 +50,4 @@ void a2p_log(int level, const char *message, ...)
 
     va_end(args);
     if(level == A2P_LOG_ERROR) exit(2);
-}
-
-int64_t a2pm_gettime(void)
-{
-    struct timeb tb;
-    ftime( &tb );
-    return ((int64_t)tb.time * 1000 + (int64_t)tb.millitm) * 1000;
 }
