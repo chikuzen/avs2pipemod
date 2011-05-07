@@ -19,18 +19,19 @@
 
 #include "version.h"
 
-#define BM_FRAMES_PAR_OUT 50
-#define Y4M_FRAME_HEADER_SIZE 6
-#define BUFSIZE_OF_STDOUT 262144 // 256kB. The optimum value might be smaller than this.
-#define A2PM_BT601 "Rec601"
-#define A2PM_BT709 "Rec709"
-#define NEED_AUDIO_INFO 1
-#define NOT_NEED_AUDIO_INFO 0
+#define BM_FRAMES_PAR_OUT       50
+#define Y4M_FRAME_HEADER_STRING "FRAME\n"
+#define Y4M_FRAME_HEADER_SIZE   6
+#define BUFSIZE_OF_STDOUT       262144 // 256kB. The optimum value might be smaller than this.
+#define A2PM_BT601              "Rec601"
+#define A2PM_BT709              "Rec709"
+#define A2PM_TRUE               1
+#define A2PM_FALSE              0
 
 enum a2p_action {
     A2P_ACTION_AUDIO,
     A2P_ACTION_Y4M,
-    A2P_ACTION_PACKEDRAW,
+    A2P_ACTION_RAWVIDEO,
     A2P_ACTION_INFO,
     A2P_ACTION_X264BD,
     A2P_ACTION_BENCHMARK,
@@ -44,50 +45,68 @@ static struct option long_opts[] = {
     {"y4mp",        optional_argument, NULL, 'p'},
     {"y4mt",        optional_argument, NULL, 't'},
     {"y4mb",        optional_argument, NULL, 'b'},
-    {"packedraw",   optional_argument, NULL, 'v'},
+    {"rawvideo",    optional_argument, NULL, 'v'},
     {"info",              no_argument, NULL, 'i'},
     {"x264bd",      optional_argument, NULL, 'x'},
     {"benchmark",         no_argument, NULL, 'B'},
     {0,0,0,0}
 };
 
-struct params {
+typedef struct {
     int sar_x;
     int sar_y;
     char ip;
     int is_raw;
     char *bit;
     enum a2p_action action;
-};
+} params;
 
-AVS_Clip * avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const char *filter);
+typedef struct {
+    int num_planes; // Y8 -> 1, others -> 3
+    int h_uv;       // horizontal subsampling of chroma
+    int v_uv;       // vertial subsampling of chroma
+    char *y4m_ctag_value;  // 
+} yuvout;
 
-AVS_Clip * avisynth_filter_yuv2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env,
-                                   const char *filter, int interlaced);
+const AVS_VideoInfo *
+avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
+                const char *filter);
 
-AVS_Clip * avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env,
-                                   const char *filter, const char *matrix,
-                                   int interlaced);
+const AVS_VideoInfo *
+avisynth_filter_yuv2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
+                        const char *filter, int interlaced);
+
+const AVS_VideoInfo *
+avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
+                        const char *filter, const char *matrix, int interlaced);
 
 AVS_Clip * avisynth_source(char *file, AVS_ScriptEnvironment *env);
 
 int64_t a2pm_gettime(void);
 
-char * pix_type_to_string(int pix_type);
+char * pix_type_to_string(int pix_type, int is_info);
 
-void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, struct params params);
+void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
-void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, struct params params);
+void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
-void do_packedraw(AVS_Clip *clip, AVS_ScriptEnvironment *env);
+void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env);
 
-void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, int audio);
+void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, int need_audio);
 
 void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input);
 
-void do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, struct params params);
+void do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
-struct params parse_opts(int argc, char **argv, struct params params);
+void parse_opts(int argc, char **argv, params *params);
+
+#ifdef A2P_AVS26
+void a2pm_csp_handle26(int pix_type, yuvout *data);
+#endif
+
+int a2pm_write_planar_frames(AVS_Clip *clip, const AVS_VideoInfo *info, yuvout *yuvout, int is_raw);
+
+int a2pm_write_packed_frames(AVS_Clip *clip, const AVS_VideoInfo *info);
 
 void usage(char *binary);
 

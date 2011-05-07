@@ -6,11 +6,11 @@ Differences with original
 * Display total elapsed time.
 * contents of 'info'
 * New options 'benchmark'.
-* 'y4mp', 'y4mt', 'y4mb' and 'packedraw' options instead of 'video'.
+* 'y4mp', 'y4mt', 'y4mb' and 'rawvideo' options instead of 'video'.
 * FieldBased input will be corrected to framebased on yuv4mpeg2 output modes.
 * Colorspace conversion that takes colormatrix and interlace into consideration.
 * 'rawaudio(output audio without header)' option.
 * Convert bit depth function in audio output mode.
-* Only the compilation with mingw is supported.
+* Only the compilation with mingw/msys is supported.
 
-                                        written by Motofumi Oka
+                                        written by Oka Motofumi
