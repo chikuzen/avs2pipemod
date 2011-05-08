@@ -848,7 +848,7 @@ void a2pm_csp_handle26(int pix_type, yuvout *data)
             break;
 
         case AVS_CS_Y8:
-            data->num_planes = 3;
+            data->num_planes = 1;
             data->y4m_ctag_value = "mono";
             data->h_uv = 0;
             data->v_uv = 0;
