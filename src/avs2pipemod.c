@@ -756,6 +756,19 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
 
 void parse_opts(int argc, char **argv, params *params)
 {
+    char short_opts[] = "a::Bb::ip::t::v::w::x::";
+    struct option long_opts[] = {
+        {"audio",       optional_argument, NULL, 'w'},
+        {"rawaudio",    optional_argument, NULL, 'a'},
+        {"y4mp",        optional_argument, NULL, 'p'},
+        {"y4mt",        optional_argument, NULL, 't'},
+        {"y4mb",        optional_argument, NULL, 'b'},
+        {"rawvideo",    optional_argument, NULL, 'v'},
+        {"info",              no_argument, NULL, 'i'},
+        {"x264bd",      optional_argument, NULL, 'x'},
+        {"benchmark",         no_argument, NULL, 'B'},
+        {0,0,0,0}
+    };
     int parse = 0;
     int index = 0;
 

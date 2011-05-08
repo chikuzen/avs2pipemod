@@ -28,7 +28,7 @@
 #define A2PM_TRUE               1
 #define A2PM_FALSE              0
 
-enum a2p_action {
+enum a2p_action{
     A2P_ACTION_AUDIO,
     A2P_ACTION_Y4M,
     A2P_ACTION_RAWVIDEO,
@@ -36,20 +36,6 @@ enum a2p_action {
     A2P_ACTION_X264BD,
     A2P_ACTION_BENCHMARK,
     A2P_ACTION_NOTHING
-};
-
-static char short_opts[] = "a::Bb::ip::t::v::w::x::";
-static struct option long_opts[] = {
-    {"audio",       optional_argument, NULL, 'w'},
-    {"rawaudio",    optional_argument, NULL, 'a'},
-    {"y4mp",        optional_argument, NULL, 'p'},
-    {"y4mt",        optional_argument, NULL, 't'},
-    {"y4mb",        optional_argument, NULL, 'b'},
-    {"rawvideo",    optional_argument, NULL, 'v'},
-    {"info",              no_argument, NULL, 'i'},
-    {"x264bd",      optional_argument, NULL, 'x'},
-    {"benchmark",         no_argument, NULL, 'B'},
-    {0,0,0,0}
 };
 
 typedef struct {
