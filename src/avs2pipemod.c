@@ -586,8 +586,6 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
 {
     // x264 arguments from http://sites.google.com/site/x264bluray/
     // resolutions, fps... http://forum.doom9.org/showthread.php?t=154533
-    //   vbv-maxrate reduced to 15000 from 40000 for DVD playback
-    //   ref added to all settings for simplicity
 
     enum res {
         A2P_RES_1080,
@@ -608,12 +606,14 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
         A2P_FPS_UNKNOWN
     } fps;
 
+    const AVS_VideoInfo *info = avs_get_video_info(clip);
+
+    if(!((info->height == 480) || (info->height == 576)) && (params->sar_x == 10))
+        a2p_log(A2P_LOG_ERROR, "DAR 4:3 is supported only ntsc/pal sd source\n");
+
     int keyint;
     char * args;
     char * color;
-    char * sar;
-
-    const AVS_VideoInfo *info = avs_get_video_info(clip);
 
     // Initial format guess, setting ref and color.
     // max safe width or height = 32767
@@ -625,31 +625,44 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
         case (1440 << 16) | 1080:
             res = A2P_RES_1080;
             color = "bt709";
-            sar = info->width == 1920 ? "1:1" : "4:3";
+            if(info->width == 1440)
+            {
+                params->sar_x = 4;
+                params->sar_y = 3;
+            }
             break;
 
         case (1280 << 16) | 720: // HD720
             res = A2P_RES_720;
             color = "bt709";
-            sar = "1:1";
             break;
 
         case (720 << 16) | 576: // PAL
             res = A2P_RES_576;
             color = "bt470bg";
-            sar = "16:11";
+            if(params->sar_x == 10)
+            {
+                params->sar_x = 12;
+                params->sar_y = 11;
+            } else {
+                params->sar_x = 16;
+                params->sar_y = 11;
+            }
             break;
 
         case (720 << 16) | 480: // NTSC
             res = A2P_RES_480;
             color = "smpte170m";
-            sar = "40:33";
+            if(params->sar_x == 1)
+            {
+                params->sar_x = 40;
+                params->sar_y = 33;
+            }
             break;
 
         default:
             res = A2P_RES_UNKNOWN;
             color = "";
-            sar = "";
             break;
     }
     // See http://avisynth.org/mediawiki/FPS
@@ -712,13 +725,13 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
         case ((A2P_RES_1080 << 16) | (A2P_FPS_30 << 8) | 1):
         case ((A2P_RES_576 << 16) | (A2P_FPS_25 << 8) | 1):
         case ((A2P_RES_480 << 16) | (A2P_FPS_29 << 8) | 1):
-            args = (params->ip == 't') ? "--tff" : "--bff";
+            args = "--tff";
             break;
 
         case ((A2P_RES_1080 << 16) | (A2P_FPS_29 << 8) | 0):
         case ((A2P_RES_1080 << 16) | (A2P_FPS_25 << 8) | 0):
         case ((A2P_RES_576 << 16) | (A2P_FPS_25 << 8) | 0):
-            args = "--fake-interlaced --pic-struct";
+            args = "--fake-interlaced";
             break;
 
         case ((A2P_RES_720 << 16) | (A2P_FPS_29 << 8) | 0):
@@ -726,9 +739,9 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
             args = "--pulldown double";
             break;
 
-        case ((A2P_RES_480 << 16) | (A2P_FPS_29 << 8) | 0):
-            args = "--pulldown 32 --fake-interlaced";
-            break;
+        //case ((A2P_RES_480 << 16) | (A2P_FPS_29 << 8) | 0):
+        //    args = "--pulldown 32 --fake-interlaced";
+        //    break;
 
         case ((A2P_RES_1080 << 16) | (A2P_FPS_23 << 8) | 0):
         case ((A2P_RES_1080 << 16) | (A2P_FPS_24 << 8) | 0):
@@ -749,9 +762,9 @@ do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
 
     fprintf(stdout,
             "--bluray-compat --vbv-maxrate 40000 --vbv-bufsize 30000"
-            " --level 4.1 --keyint %d --open-gop --slices 4 %s --sar %s"
+            " --level 4.1 --keyint %d --open-gop --slices 4 %s --sar %d:%d"
             " --colorprim %s --transfer %s --colormatrix %s",
-            keyint, args, sar, color, color, color);
+            keyint, args, params->sar_x, params->sar_y, color, color, color);
 }
 
 void parse_opts(int argc, char **argv, params *params)
@@ -765,7 +778,8 @@ void parse_opts(int argc, char **argv, params *params)
         {"y4mb",        optional_argument, NULL, 'b'},
         {"rawvideo",    optional_argument, NULL, 'v'},
         {"info",              no_argument, NULL, 'i'},
-        {"x264bd",      optional_argument, NULL, 'x'},
+        {"x264bdp",     optional_argument, NULL, 'x'},
+        {"x264bdt",     optional_argument, NULL, 'y'},
         {"benchmark",         no_argument, NULL, 'B'},
         {0,0,0,0}
     };
@@ -811,13 +825,18 @@ void parse_opts(int argc, char **argv, params *params)
                 break;
 
             case 'x':
+            case 'y':
                 params->action = A2P_ACTION_X264BD;
+                params->ip = parse == 'x' ? 'p' : 't';
+                params->sar_x = 1;
+                params->sar_y = 1;
                 if(optarg)
                 {
-                    params->ip = (!strncmp(optarg, "tff", 3)) ? 't' :
-                                 (!strncmp(optarg, "bff", 3)) ? 'b' : 'x';
-                    if(params->ip == 'x')
+                    if(!strncmp(optarg, "4:3", 3))
                     {
+                        params->sar_x = 10;
+                        params->sar_y = 11;
+                    } else {
                         fprintf(stderr, "invalid argument \"%s\".\n\n", optarg);
                         params->action = A2P_ACTION_NOTHING;
                     }
@@ -984,14 +1003,20 @@ void usage(char *binary)
             "   -rawvideo\n"
             "       output rawvideo(without any header) to stdout.\n"
             "\n"
-            "   -x264bd[=tff|bff  default unset(progressive)]\n"
-            "       suggest x264(r1936 or later) arguments for bluray disc encoding.\n"
+            "   -x264bdp[=4:3  default unset(16:9)]\n"
+            "       suggest x264(r1939 or later) arguments for bluray disc encoding in case of progressive source.\n"
+            "       set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
+            "   -x264bdt[=4:3  default uset(16:9)]\n"
+            "       suggest x264(r1939 or later) arguments for bluray disc encoding in case of tff source.\n"
+            "       set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
             "\n"
             "   -info  - output information about aviscript clip.\n"
             "\n"
             "   -benchmark - do benchmark aviscript, and output results to stdout.\n"
             "\n"
-            "note : in yuv4mpeg2 output mode, RGB input that has 720pix height or more will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
+            "note  : in yuv4mpeg2 output mode, RGB input that has 720pix height or more will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
+            "\n"
+            "note2: '-x264bdp/t' support only for primary stream encoding.\n"
             , A2PM_VERSION, A2PM_DATE_OF_BUILD, binary);
     exit(2);
 }
