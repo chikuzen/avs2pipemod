@@ -28,7 +28,7 @@
 int __cdecl
 main (int argc, char **argv)
 {
-    params a2pm_params = {0, 0, 'p', 0, "", A2P_ACTION_NOTHING};
+    params a2pm_params = {0, 0, 'p', 0, NULL, A2P_ACTION_NOTHING};
     parse_opts(argc, argv, &a2pm_params);
 
     if(a2pm_params.action == A2P_ACTION_NOTHING)
