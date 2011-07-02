@@ -30,16 +30,16 @@ case $1 in
     make )
         make_version.h
         cd src
-        gcc -Wall -O3 -march=i686 -DA2P_AVS26 avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../avs2pipe26mod.exe
+        gcc -Wall -O3 -std=gnu99 -march=i686 -DA2P_AVS26 avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../avs2pipe26mod.exe
         strip ../avs2pipe26mod.exe
-        gcc -Wall -O3 -march=i686 avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../avs2pipemod.exe
+        gcc -Wall -O3 -std=gnu99 -march=i686 avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../avs2pipemod.exe
         strip ../avs2pipemod.exe
         ;;
     debug )
         make_version.h
         cd src
-        gcc -Wall -g -DA2P_AVS26 avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../a2pm26_dbg.exe
-        gcc -Wall -g avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../a2pm_dbg.exe
+        gcc -Wall -g -std=gnu99 -DA2P_AVS26 avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../a2pm26_dbg.exe
+        gcc -Wall -g -std=gnu99 avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../a2pm_dbg.exe
         ;;
     clean )
         rm ./*avs2pipe*.exe ./*_dbg.exe

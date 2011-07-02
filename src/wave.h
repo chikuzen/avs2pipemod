@@ -29,10 +29,10 @@ typedef struct WaveGuid WaveGuid;
 typedef struct WaveChunkHeader WaveChunkHeader;
 typedef struct WaveRiffChunk WaveRiffChunk;
 typedef struct WaveDs64Chunk WaveDs64Chunk;
-typedef struct WaveFormatChunk WaveFormatChunk;
+typedef struct WaveFormatExtChunk WaveFormatExtChunk;
 typedef struct WaveFactChunk WaveFactChunk;
 typedef struct WaveDataChunk WaveDataChunk;
-typedef struct WaveRiffHeader WaveRiffHeader;
+typedef struct WaveRiffExtHeader WaveRiffExtHeader;
 typedef struct WaveRf64Header WaveRf64Header;
 
 
@@ -43,20 +43,21 @@ typedef struct WaveRf64Header WaveRf64Header;
 void
 wave_guid_copy(WaveGuid *dst, WaveGuid *src);
 
-WaveRiffHeader *
-wave_create_riff_header (WaveFormatType format,
-                         uint16_t       channels,
-                         uint32_t       sample_rate,
-                         uint16_t       byte_depth,
-                         uint64_t       samples);
+WaveRiffExtHeader *
+wave_create_riff_ext_header(WaveFormatType format,
+                            uint16_t       channels,
+                            uint32_t       sample_rate,
+                            uint16_t       byte_depth,
+                            uint64_t       samples);
 
 WaveRf64Header *
-wave_create_rf64_header (WaveFormatType format,
-                           uint16_t       channels,
-                           uint32_t       sample_rate,
-                           uint16_t       byte_depth,
-                           uint64_t       samples);
+wave_create_rf64_header(WaveFormatType format,
+                        uint16_t       channels,
+                        uint32_t       sample_rate,
+                        uint16_t       byte_depth,
+                        uint64_t       samples);
 
+uint32_t get_channel_mask(uint16_t channels);
 
 enum WaveFormatType {
     WAVE_FORMAT_PCM         = 0x0001,   // samples are ints
@@ -64,6 +65,19 @@ enum WaveFormatType {
     WAVE_FORMAT_EXTENSIBLE  = 0xFFFE    // not a real type.
 };
 
+enum speaker_position {
+    FRONT_LEFT              = 0x1,
+    FRONT_RIGHT             = 0x2,
+    FRONT_CENTER            = 0x4,
+    LOW_FREQUENCY           = 0x8,
+    BACK_LEFT               = 0x10,
+    BACK_RIGHT              = 0x20,
+    FRONT_LEFT_OF_CENTER    = 0x40,
+    FRONT_RIGHT_OF_CENTER   = 0x80,
+    BACK_CENTER             = 0x100,
+    SIDE_LEFT               = 0x200,
+    SIDE_RIGHT              = 0x400
+};
 
 // set packing alignment to 1 byte so we can just fwrite structs
 // gcc docs say it supports this to be compatable with vs.
@@ -102,7 +116,7 @@ struct WaveDs64Chunk {
 };
 
 // wave format chunk based on WAVE_FORMAT_EXTENSIBLE
-struct WaveFormatChunk {
+struct WaveFormatExtChunk {
     WaveChunkHeader header;         // id = FMT_, size = sizeof(WaveFormatChunk) - sizeof(header)
     uint16_t        tag;            // WAVE_FORMAT_EXTENSIBLE
     uint16_t        channels;       // number of channels
@@ -128,9 +142,9 @@ struct WaveDataChunk {
 };
 
 // complete RIFF header for a WAVE_FORMAT_EXTENSIBLE file
-struct WaveRiffHeader {
+struct WaveRiffExtHeader {
     WaveRiffChunk   riff;
-    WaveFormatChunk format;
+    WaveFormatExtChunk format;
     WaveFactChunk   fact;
     WaveDataChunk   data;
 };
@@ -139,7 +153,7 @@ struct WaveRiffHeader {
 struct WaveRf64Header {
     WaveRiffChunk   riff;           // id = RF64
     WaveDs64Chunk   ds64;
-    WaveFormatChunk format;
+    WaveFormatExtChunk format;
     WaveFactChunk   fact;
     WaveDataChunk   data;
 };

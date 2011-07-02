@@ -76,7 +76,7 @@ void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
 void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
-void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env);
+void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
 void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, int need_audio);
 
