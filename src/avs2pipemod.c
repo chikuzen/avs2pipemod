@@ -28,7 +28,7 @@
 int __cdecl
 main (int argc, char **argv)
 {
-    params a2pm_params = {0, 0, 'p', 0, NULL, A2P_ACTION_NOTHING};
+    params a2pm_params = {0, 0, 'p', A2PM_NORMAL, NULL, A2P_ACTION_NOTHING};
     parse_opts(argc, argv, &a2pm_params);
 
     if(a2pm_params.action == A2P_ACTION_NOTHING)
@@ -91,13 +91,13 @@ avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env,
 const AVS_VideoInfo *
 avisynth_filter_yuv2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env,
                         const AVS_VideoInfo *info, const char *filter,
-                        int interlaced)
+                        a2pm_bool is_interlaced)
 {
     AVS_Value val_clip = avs_new_value_clip(clip);
     avs_release_clip(clip);
 
     const char *arg_name[2] = {NULL, "interlaced"};
-    AVS_Value val_array[2] = {val_clip, avs_new_value_bool(interlaced)};
+    AVS_Value val_array[2] = {val_clip, avs_new_value_bool(is_interlaced)};
     AVS_Value val_return = avs_invoke(env, filter, avs_new_value_array(val_array, 2), arg_name);
     if(avs_is_error(val_return))
         a2p_log(A2P_LOG_ERROR, "%s failed.\n", filter);
@@ -112,13 +112,14 @@ avisynth_filter_yuv2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env,
 const AVS_VideoInfo *
 avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env,
                         const AVS_VideoInfo *info, const char *filter,
-                        const char *matrix, int interlaced)
+                        const char *matrix, a2pm_bool is_interlaced)
 {
     AVS_Value val_clip = avs_new_value_clip(clip);
     avs_release_clip(clip);
 
     const char *arg_name[3] = {NULL, "matrix", "interlaced"};
-    AVS_Value val_array[3] = {val_clip, avs_new_value_string(matrix), avs_new_value_bool(interlaced)};
+    AVS_Value val_array[3] = {val_clip, avs_new_value_string(matrix),
+                              avs_new_value_bool(is_interlaced)};
     AVS_Value val_return = avs_invoke(env, filter, avs_new_value_array(val_array, 3), arg_name);
     if(avs_is_error(val_return))
         a2p_log(A2P_LOG_ERROR, "%s failed.\n", filter);
@@ -156,7 +157,7 @@ int64_t a2pm_gettime(void)
     return ((int64_t)tb.time * 1000 + (int64_t)tb.millitm) * 1000;
 }
 
-char * pix_type_to_string(int pix_type, int is_info)
+char * pix_type_to_string(int pix_type, a2pm_bool is_info)
 {
     char *pix_type_string;
 
@@ -231,17 +232,27 @@ void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
 
     int64_t start = a2pm_gettime();
 
-    if(!params->is_raw) {
+    if(params->fmt_type != A2PM_RAW) {
         WaveFormatType format = (info->sample_type == AVS_SAMPLE_FLOAT) ?
                                 WAVE_FORMAT_IEEE_FLOAT :
                                 WAVE_FORMAT_PCM;
-        WaveRiffExtHeader *header
-            = wave_create_riff_ext_header(format, info->nchannels,
+        if (params->fmt_type == A2PM_EXTRA) {
+            WaveRiffExtHeader *header
+                = wave_create_riff_ext_header(format, info->nchannels,
+                                              info->audio_samples_per_second,
+                                              avs_bytes_per_channel_sample(info),
+                                              info->num_audio_samples);
+            fwrite(header, sizeof(*header), 1, stdout);
+            free(header);
+        } else {
+            WaveRiffHeader *header
+                = wave_create_riff_header(format, info->nchannels,
                                           info->audio_samples_per_second,
                                           avs_bytes_per_channel_sample(info),
                                           info->num_audio_samples);
-        fwrite(header, sizeof(*header), 1, stdout);
-        free(header);
+            fwrite(header, sizeof(*header), 1, stdout);
+            free(header);
+        }
     }
 
     uint64_t i;
@@ -327,7 +338,7 @@ void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
         else if(avs_is_rgb(info)) {
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv420 with %s coefficients.\n", matrix);
             info=avisynth_filter_rgb2yuv(clip, env, info, "ConvertToYV12",
-                                         (info->height < 720) ? A2PM_BT601 : A2PM_BT709,
+                                         info->height < 720 ? A2PM_BT601 : A2PM_BT709,
                                          params->ip == 'p' ? 0 : 1);
         } else {
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv420.\n", 0);
@@ -353,7 +364,7 @@ void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
             info->height, info->fps_numerator, info->fps_denominator,
             params->ip, params->sar_x, params->sar_y, y4mout.y4m_ctag_value);
 
-    int wrote = a2pm_write_planar_frames(clip, info, &y4mout, params->is_raw);
+    int wrote = a2pm_write_planar_frames(clip, info, &y4mout, A2PM_FALSE);
 
     fflush(stdout); // clear buffers before we exit
 
@@ -378,12 +389,12 @@ void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
     if(!avs_has_video(info))
         a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
 
-    if(params->is_raw > A2PM_TRUE) {
+    if(params->fmt_type == A2PM_EXTRA) {
         info = avisynth_filter(clip, env, info, "FlipVertical");
         a2p_log(A2P_LOG_INFO, "Video has flipped.\n");
     }
 
-    int is_planar;
+    a2pm_bool is_planar;
     switch(info->pixel_type) {
         case AVS_CS_BGR32:
         case AVS_CS_BGR24:
@@ -431,7 +442,7 @@ void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
         a2p_log(A2P_LOG_ERROR, "only wrote %d of %d frames.\n", wrote, info->num_frames);
 }
 
-void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, int need_audio)
+void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, a2pm_bool need_audio)
 {
     const AVS_VideoInfo *info = avs_get_video_info(clip);
 
@@ -705,18 +716,19 @@ void do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
 
 void parse_opts(int argc, char **argv, params *params)
 {
-    char short_opts[] = "a::Bb::ip::t::v::w::x::";
+    char short_opts[] = "a::Bb::e::ip::t::v::w::x::";
     struct option long_opts[] = {
-        {"audio",       optional_argument, NULL, 'w'},
-        {"rawaudio",    optional_argument, NULL, 'a'},
-        {"y4mp",        optional_argument, NULL, 'p'},
-        {"y4mt",        optional_argument, NULL, 't'},
-        {"y4mb",        optional_argument, NULL, 'b'},
-        {"rawvideo",    optional_argument, NULL, 'v'},
-        {"info",              no_argument, NULL, 'i'},
-        {"x264bdp",     optional_argument, NULL, 'x'},
-        {"x264bdt",     optional_argument, NULL, 'y'},
-        {"benchmark",         no_argument, NULL, 'B'},
+        {"wav",      optional_argument, NULL, 'w'},
+        {"extwav",   optional_argument, NULL, 'e'},
+        {"rawaudio", optional_argument, NULL, 'a'},
+        {"y4mp",     optional_argument, NULL, 'p'},
+        {"y4mt",     optional_argument, NULL, 't'},
+        {"y4mb",     optional_argument, NULL, 'b'},
+        {"rawvideo", optional_argument, NULL, 'v'},
+        {"info",           no_argument, NULL, 'i'},
+        {"x264bdp",  optional_argument, NULL, 'x'},
+        {"x264bdt",  optional_argument, NULL, 'y'},
+        {"benchmark",      no_argument, NULL, 'B'},
         {0,0,0,0}
     };
     int parse = 0;
@@ -725,17 +737,20 @@ void parse_opts(int argc, char **argv, params *params)
     while((parse = getopt_long_only(argc, argv, short_opts, long_opts, &index)) != -1) {
         switch(parse) {
             case 'a':
+            case 'e':
             case 'w':
                 params->action = A2P_ACTION_AUDIO;
                 if(optarg)
                     params->bit = optarg;
-                params->is_raw = (parse == 'a') ? A2PM_TRUE : A2PM_FALSE;
+                params->fmt_type = (parse == 'w') ? A2PM_NORMAL :
+                                   (parse == 'a') ? A2PM_RAW :
+                                                    A2PM_EXTRA;
                 break;
             case 't':
             case 'b':
             case 'p':
                 params->action = A2P_ACTION_Y4M;
-                params->is_raw = A2PM_FALSE;
+                params->fmt_type = A2PM_NORMAL;
                 if(optarg) {
                     sscanf(optarg, "%d:%d", &(params->sar_x), &(params->sar_y));
                     if(!(((params->sar_x > 0) && (params->sar_y >0)) ||
@@ -749,9 +764,9 @@ void parse_opts(int argc, char **argv, params *params)
             case 'v':
                 params->action = A2P_ACTION_RAWVIDEO;
                 if(optarg && !strncmp(optarg, "vflip", 5))
-                    params->is_raw = A2PM_TRUE + 1;
+                    params->fmt_type = A2PM_EXTRA;
                 else
-                    params->is_raw = A2PM_TRUE;
+                    params->fmt_type = A2PM_RAW;
                 break;
             case 'i':
                 params->action = A2P_ACTION_INFO;
@@ -815,14 +830,14 @@ void a2pm_csp_handle26(int pix_type, yuvout *data)
 }
 #endif
 
-int a2pm_write_planar_frames(AVS_Clip *clip, const AVS_VideoInfo *info, yuvout *yuvout, int is_raw)
+int a2pm_write_planar_frames(AVS_Clip *clip, const AVS_VideoInfo *info, yuvout *yuvout, a2pm_bool is_raw)
 {
     AVS_VideoFrame *frame;
     const BYTE *buff ;
     size_t count = (info->width * info->height * avs_bits_per_pixel(info)) >> 3;
     int wrote = 0;
     const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
-    const char *header = !is_raw ? Y4M_FRAME_HEADER_STRING : "";
+    const char *header = is_raw ? "" : Y4M_FRAME_HEADER_STRING;
 
     for(int f = 0; f < info->num_frames; f++) {
         fprintf(stdout, header);
@@ -895,8 +910,13 @@ void usage(char *binary)
             "  e.g. avs2pipemod -audio=24bit input.avs > output.wav\n"
             "       avs2pipemod -y4mt=10:11 input.avs | x264 - --demuxer y4m -o tff.mkv\n"
             "\n"
-            "   -audio[=8bit|16bit|24bit|32bit|float  default unset]\n"
-            "       output wav extensible format audio to stdout.\n"
+            "   -wav[=8bit|16bit|24bit|32bit|float  default unset]\n"
+            "       output wav format audio to stdout.\n"
+            "       if optional arg is set, bit depth of input will be converted\n"
+            "      to specified value.\n"
+            "\n"
+            "   -extwav[=8bit|16bit|24bit|32bit|float  default unset]\n"
+            "       output wav extensible format audio containing channel-mask to stdout.\n"
             "       if optional arg is set, bit depth of input will be converted\n"
             "      to specified value.\n"
             "\n"
@@ -928,9 +948,22 @@ void usage(char *binary)
             "\n"
             "   -benchmark - do benchmark aviscript, and output results to stdout.\n"
             "\n"
-            "note  : in yuv4mpeg2 output mode, RGB input that has 720pix height or more will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
+            "note  : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
+            "       will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
             "\n"
-            "note2: '-x264bdp/t' support only for primary stream encoding.\n"
+            "note2 : '-x264bdp/t' supports only for primary stream encoding.\n"
+            "\n"
+            "note3 : '-extaudio' supports only general speaker positions.\n"
+            " Chan. MS channels                Description\n"
+            " ----- -------------------------  ----------------\n"
+            "  1    FC                         Mono\n"
+            "  2    FL FR                      Stereo\n"
+            "  3    FL FR BC                   First Surround\n"
+            "  4    FL FR BL BR                Quadro\n"
+            "  5    FL FR FC BL BR             like Dpl II (without LFE)\n"
+            "  6    FL FR FC LF BL BR          Standard Surround\n"
+            "  7    FL FR FC LF BL BR BC       With back center\n"
+            "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n"
             , A2PM_VERSION, A2PM_DATE_OF_BUILD, binary);
     exit(2);
 }

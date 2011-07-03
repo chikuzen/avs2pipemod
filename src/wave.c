@@ -1,20 +1,21 @@
-/* 
- * Copyright (C) 2010 Chris Beswick <chris.beswick@gmail.com>
+/*
+ * Copyright (C) 2010-2011 Oka Motofumi <chikuzen.mo at gmail dot com>
+ *                         Chris Beswick <chris.beswick@gmail.com>
  *
- * This file is part of avs2pipe.
+ * This file is part of avs2pipemod.
  *
- * avs2pipe is free software: you can redistribute it and/or modify
+ * avs2pipemod is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * avs2pipe is distributed in the hope that it will be useful,
+ * avs2pipemod is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with avs2pipe.  If not, see <http://www.gnu.org/licenses/>.
+ * along with avs2pipemod.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -35,6 +36,54 @@ wave_guid_copy(WaveGuid *dst, WaveGuid *src)
     dst->d4[5] = src->d4[5];
     dst->d4[6] = src->d4[6];
     dst->d4[7] = src->d4[7];
+}
+
+WaveRiffHeader *
+wave_create_riff_header(WaveFormatType format,
+                        uint16_t       channels,
+                        uint32_t       sample_rate,
+                        uint16_t       byte_depth,
+                        uint64_t       samples)
+{
+    WaveRiffHeader *header = malloc(sizeof(*header));
+    uint32_t data_size, riff_size, fact_samples;
+
+    if(samples > UINT32_MAX) {
+        a2p_log(A2P_LOG_WARNING, "audio sample number over 32bit limit.\n");
+        fact_samples = UINT32_MAX;
+    } else {
+        fact_samples = (uint32_t)samples;
+    }
+
+    if((samples * channels * byte_depth + sizeof(*header)
+          - sizeof(header->riff.header)) > UINT32_MAX) {
+        a2p_log(A2P_LOG_WARNING, "audio size over 32bit limit (4GB)"
+                                 ", clients may truncate audio.\n");
+        data_size = UINT32_MAX;
+        riff_size = UINT32_MAX;
+    } else {
+        data_size = fact_samples * channels * byte_depth;
+        riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
+    }
+
+    header->riff.header.id      = WAVE_FOURCC('R', 'I', 'F', 'F');
+    header->riff.header.size    = riff_size;
+    header->riff.type           = WAVE_FOURCC('W', 'A', 'V', 'E');
+
+    header->format.header.id    = WAVE_FOURCC('f', 'm', 't', ' ');
+    header->format.header.size  = sizeof(header->format)
+                                    - sizeof(header->format.header);
+    header->format.tag          = format;
+    header->format.channels     = channels;
+    header->format.sample_rate  = sample_rate;
+    header->format.byte_rate    = channels * sample_rate * byte_depth;
+    header->format.block_align  = channels * byte_depth;
+    header->format.bit_depth    = byte_depth * 8;
+    header->format.ext_size     = 0;
+    header->data.header.id      = WAVE_FOURCC('d', 'a', 't', 'a');
+    header->data.header.size    = data_size;
+
+    return header;
 }
 
 WaveRiffExtHeader *
@@ -59,7 +108,7 @@ wave_create_riff_ext_header(WaveFormatType format,
         fact_samples = (uint32_t) samples;
     }
 
-    if((samples * channels * byte_depth + sizeof(*header) 
+    if((samples * channels * byte_depth + sizeof(*header)
           - sizeof(header->riff.header)) > UINT32_MAX) {
         a2p_log(A2P_LOG_WARNING, "audio size over 32bit limit (4GB)"
                                  ", clients may truncate audio.\n");
@@ -75,7 +124,7 @@ wave_create_riff_ext_header(WaveFormatType format,
     header->riff.type           = WAVE_FOURCC('W', 'A', 'V', 'E');
 
     header->format.header.id    = WAVE_FOURCC('f', 'm', 't', ' ');
-    header->format.header.size  = sizeof(header->format) 
+    header->format.header.size  = sizeof(header->format)
                                     - sizeof(header->format.header);
     header->format.tag          = WAVE_FORMAT_EXTENSIBLE;
     header->format.channels     = channels;
@@ -128,7 +177,7 @@ wave_create_rf64_header(WaveFormatType format,
     header->ds64.table_size     = 0;
 
     header->format.header.id    = WAVE_FOURCC('f', 'm', 't', ' ');
-    header->format.header.size  = sizeof(header->format) 
+    header->format.header.size  = sizeof(header->format)
                                     - sizeof(header->format.header);
     header->format.tag          = WAVE_FORMAT_EXTENSIBLE;
     header->format.channels     = channels;

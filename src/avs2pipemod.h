@@ -22,13 +22,11 @@
 #define BM_FRAMES_PAR_OUT       50
 #define Y4M_FRAME_HEADER_STRING "FRAME\n"
 #define Y4M_FRAME_HEADER_SIZE   6
-#define BUFSIZE_OF_STDOUT       262144 // 256kB. The optimum value might be smaller than this.
+#define BUFSIZE_OF_STDOUT       262144 // 256KiB. The optimum value might be smaller than this.
 #define A2PM_BT601              "Rec601"
 #define A2PM_BT709              "Rec709"
-#define A2PM_TRUE               1
-#define A2PM_FALSE              0
 
-enum a2p_action{
+enum a2p_action {
     A2P_ACTION_AUDIO,
     A2P_ACTION_Y4M,
     A2P_ACTION_RAWVIDEO,
@@ -37,12 +35,22 @@ enum a2p_action{
     A2P_ACTION_BENCHMARK,
     A2P_ACTION_NOTHING
 };
+typedef enum {
+    A2PM_FALSE,
+    A2PM_TRUE
+} a2pm_bool;
+
+typedef enum {
+    A2PM_RAW,
+    A2PM_NORMAL,
+    A2PM_EXTRA
+} fmt_type;
 
 typedef struct {
     int sar_x;
     int sar_y;
     char ip;
-    int is_raw;
+    fmt_type fmt_type;
     char *bit;
     enum a2p_action action;
 } params;
@@ -60,17 +68,17 @@ avisynth_filter(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo 
 
 const AVS_VideoInfo *
 avisynth_filter_yuv2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
-                        const char *filter, int interlaced);
+                        const char *filter, a2pm_bool is_interlaced);
 
 const AVS_VideoInfo *
 avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
-                        const char *filter, const char *matrix, int interlaced);
+                        const char *filter, const char *matrix, a2pm_bool is_interlaced);
 
 AVS_Clip * avisynth_source(char *file, AVS_ScriptEnvironment *env);
 
 int64_t a2pm_gettime(void);
 
-char * pix_type_to_string(int pix_type, int is_info);
+char * pix_type_to_string(int pix_type, a2pm_bool is_info);
 
 void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
@@ -78,7 +86,7 @@ void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
 void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
-void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, int need_audio);
+void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, a2pm_bool need_audio);
 
 void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input);
 
@@ -90,7 +98,7 @@ void parse_opts(int argc, char **argv, params *params);
 void a2pm_csp_handle26(int pix_type, yuvout *data);
 #endif
 
-int a2pm_write_planar_frames(AVS_Clip *clip, const AVS_VideoInfo *info, yuvout *yuvout, int is_raw);
+int a2pm_write_planar_frames(AVS_Clip *clip, const AVS_VideoInfo *info, yuvout *yuvout, a2pm_bool is_raw);
 
 int a2pm_write_packed_frames(AVS_Clip *clip, const AVS_VideoInfo *info);
 

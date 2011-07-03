@@ -1,20 +1,21 @@
 /* 
- * Copyright (C) 2010 Chris Beswick <chris.beswick@gmail.com>
+ * Copyright (C) 2010-2011 Oka Motofumi <chikuzen.mo at gmail dot com>
+ *                         Chris Beswick <chris.beswick@gmail.com>
  *
- * This file is part of avs2pipe.
+ * This file is part of avs2pipemod.
  *
- * avs2pipe is free software: you can redistribute it and/or modify
+ * avs2pipemod is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * avs2pipe is distributed in the hope that it will be useful,
+ * avs2pipemod is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with avs2pipe.  If not, see <http://www.gnu.org/licenses/>.
+ * along with avs2pipemod.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -29,9 +30,11 @@ typedef struct WaveGuid WaveGuid;
 typedef struct WaveChunkHeader WaveChunkHeader;
 typedef struct WaveRiffChunk WaveRiffChunk;
 typedef struct WaveDs64Chunk WaveDs64Chunk;
+typedef struct WaveFormatChunk WaveFormatChunk;
 typedef struct WaveFormatExtChunk WaveFormatExtChunk;
 typedef struct WaveFactChunk WaveFactChunk;
 typedef struct WaveDataChunk WaveDataChunk;
+typedef struct WaveRiffHeader WaveRiffHeader;
 typedef struct WaveRiffExtHeader WaveRiffExtHeader;
 typedef struct WaveRf64Header WaveRf64Header;
 
@@ -42,6 +45,13 @@ typedef struct WaveRf64Header WaveRf64Header;
 
 void
 wave_guid_copy(WaveGuid *dst, WaveGuid *src);
+
+WaveRiffHeader *
+wave_create_riff_header(WaveFormatType format,
+                        uint16_t       channels,
+                        uint32_t       sample_rate,
+                        uint16_t       byte_depth,
+                        uint64_t       samples);
 
 WaveRiffExtHeader *
 wave_create_riff_ext_header(WaveFormatType format,
@@ -66,17 +76,17 @@ enum WaveFormatType {
 };
 
 enum speaker_position {
-    FRONT_LEFT              = 0x1,
-    FRONT_RIGHT             = 0x2,
-    FRONT_CENTER            = 0x4,
-    LOW_FREQUENCY           = 0x8,
-    BACK_LEFT               = 0x10,
-    BACK_RIGHT              = 0x20,
-    FRONT_LEFT_OF_CENTER    = 0x40,
-    FRONT_RIGHT_OF_CENTER   = 0x80,
-    BACK_CENTER             = 0x100,
-    SIDE_LEFT               = 0x200,
-    SIDE_RIGHT              = 0x400
+    FRONT_LEFT              = 0x0001,
+    FRONT_RIGHT             = 0x0002,
+    FRONT_CENTER            = 0x0004,
+    LOW_FREQUENCY           = 0x0008,
+    BACK_LEFT               = 0x0010,
+    BACK_RIGHT              = 0x0020,
+    FRONT_LEFT_OF_CENTER    = 0x0040,
+    FRONT_RIGHT_OF_CENTER   = 0x0080,
+    BACK_CENTER             = 0x0100,
+    SIDE_LEFT               = 0x0200,
+    SIDE_RIGHT              = 0x0400
 };
 
 // set packing alignment to 1 byte so we can just fwrite structs
@@ -115,6 +125,18 @@ struct WaveDs64Chunk {
     uint32_t        table_size;     // 0, spec does not say what this is for, anyone???
 };
 
+// wave format chunk based on WAVE_FORMAT
+struct WaveFormatChunk {
+    WaveChunkHeader header;
+    uint16_t        tag;
+    uint16_t        channels;
+    uint32_t        sample_rate;
+    uint32_t        byte_rate;
+    uint16_t        block_align;
+    uint16_t        bit_depth;
+    uint16_t        ext_size;
+};
+
 // wave format chunk based on WAVE_FORMAT_EXTENSIBLE
 struct WaveFormatExtChunk {
     WaveChunkHeader header;         // id = FMT_, size = sizeof(WaveFormatChunk) - sizeof(header)
@@ -139,6 +161,13 @@ struct WaveFactChunk {
 // partial data chunk, just the header, would be stupid to place ALL data into a struct
 struct WaveDataChunk {
     WaveChunkHeader header;         // id = FACT, size = sizeof(data)
+};
+
+// RIFF header for a WAVE_FORMAT file
+struct WaveRiffHeader {
+    WaveRiffChunk   riff;
+    WaveFormatChunk format;
+    WaveDataChunk   data;
 };
 
 // complete RIFF header for a WAVE_FORMAT_EXTENSIBLE file
