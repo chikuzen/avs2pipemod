@@ -43,7 +43,8 @@ typedef enum {
 typedef enum {
     A2PM_RAW,
     A2PM_NORMAL,
-    A2PM_EXTRA
+    A2PM_EXTRA,
+    A2PM_EXTRA2
 } fmt_type;
 
 typedef struct {

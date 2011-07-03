@@ -236,7 +236,15 @@ void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
         WaveFormatType format = (info->sample_type == AVS_SAMPLE_FLOAT) ?
                                 WAVE_FORMAT_IEEE_FLOAT :
                                 WAVE_FORMAT_PCM;
-        if (params->fmt_type == A2PM_EXTRA) {
+        if (params->fmt_type == A2PM_EXTRA2) {
+            WaveRf64Header *header
+                = wave_create_rf64_header(format, info->nchannels,
+                                          info->audio_samples_per_second,
+                                          avs_bytes_per_channel_sample(info),
+                                          info->num_audio_samples);
+            fwrite(header, sizeof(*header), 1, stdout);
+            free(header);
+        } else if (params->fmt_type == A2PM_EXTRA) {
             WaveRiffExtHeader *header
                 = wave_create_riff_ext_header(format, info->nchannels,
                                               info->audio_samples_per_second,
@@ -720,6 +728,7 @@ void parse_opts(int argc, char **argv, params *params)
     struct option long_opts[] = {
         {"wav",      optional_argument, NULL, 'w'},
         {"extwav",   optional_argument, NULL, 'e'},
+        {"rf64",     optional_argument, NULL, 'r'},
         {"audio",    optional_argument, NULL, 'e'},
         {"rawaudio", optional_argument, NULL, 'a'},
         {"y4mp",     optional_argument, NULL, 'p'},
@@ -740,12 +749,14 @@ void parse_opts(int argc, char **argv, params *params)
             case 'a':
             case 'e':
             case 'w':
+            case 'r':
                 params->action = A2P_ACTION_AUDIO;
                 if(optarg)
                     params->bit = optarg;
-                params->fmt_type = (parse == 'w') ? A2PM_NORMAL :
-                                   (parse == 'a') ? A2PM_RAW :
-                                                    A2PM_EXTRA;
+                params->fmt_type = parse == 'e' ? A2PM_EXTRA :
+                                   parse == 'r' ? A2PM_EXTRA2 :
+                                   parse == 'a' ? A2PM_RAW :
+                                                  A2PM_NORMAL;
                 break;
             case 't':
             case 'b':
