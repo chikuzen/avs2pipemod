@@ -899,7 +899,7 @@ void usage(char *binary)
     #ifdef A2P_AVS26
         fprintf(stderr, "avs2pipemod for AviSynth 2.6.0 Alpha 2 or later");
     #else
-        fprintf(stderr, "avs2pipemod for AviSynth 2.5.8");
+        fprintf(stderr, "avs2pipemod for AviSynth 2.5x");
     #endif
 
     fprintf(stderr,
@@ -907,7 +907,7 @@ void usage(char *binary)
             "build on %s\n"
             "\n"
             "Usage: %s [one option] input.avs\n"
-            "  e.g. avs2pipemod -audio=24bit input.avs > output.wav\n"
+            "  e.g. avs2pipemod -wav=24bit input.avs > output.wav\n"
             "       avs2pipemod -y4mt=10:11 input.avs | x264 - --demuxer y4m -o tff.mkv\n"
             "\n"
             "   -wav[=8bit|16bit|24bit|32bit|float  default unset]\n"
