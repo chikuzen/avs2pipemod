@@ -720,6 +720,7 @@ void parse_opts(int argc, char **argv, params *params)
     struct option long_opts[] = {
         {"wav",      optional_argument, NULL, 'w'},
         {"extwav",   optional_argument, NULL, 'e'},
+        {"audio",    optional_argument, NULL, 'e'},
         {"rawaudio", optional_argument, NULL, 'a'},
         {"y4mp",     optional_argument, NULL, 'p'},
         {"y4mt",     optional_argument, NULL, 't'},
@@ -953,7 +954,7 @@ void usage(char *binary)
             "\n"
             "note2 : '-x264bdp/t' supports only for primary stream encoding.\n"
             "\n"
-            "note3 : '-extaudio' supports only general speaker positions.\n"
+            "note3 : '-extwav' supports only general speaker positions.\n"
             " Chan. MS channels                Description\n"
             " ----- -------------------------  ----------------\n"
             "  1    FC                         Mono\n"
