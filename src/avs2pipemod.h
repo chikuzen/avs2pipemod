@@ -22,7 +22,7 @@
 #define BM_FRAMES_PAR_OUT       50
 #define Y4M_FRAME_HEADER_STRING "FRAME\n"
 #define Y4M_FRAME_HEADER_SIZE   6
-#define BUFSIZE_OF_STDOUT       262144 // 256KiB. The optimum value might be smaller than this.
+#define BUFSIZE_OF_STDOUT       128*1024 // 128KiB. The optimum value might be smaller than this.
 #define A2PM_BT601              "Rec601"
 #define A2PM_BT709              "Rec709"
 

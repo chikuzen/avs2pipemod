@@ -30,10 +30,8 @@ case $1 in
     make )
         make_version.h
         cd src
-        gcc -Wall -O3 -std=gnu99 -march=i686 -DA2P_AVS26 avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../avs2pipe26mod.exe
-        strip ../avs2pipe26mod.exe
-        gcc -Wall -O3 -std=gnu99 -march=i686 avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../avs2pipemod.exe
-        strip ../avs2pipemod.exe
+        gcc -Wall -O3 -std=gnu99 -s -DA2P_AVS26 -march=i686 -ffast-math avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../avs2pipe26mod.exe
+        gcc -Wall -O3 -std=gnu99 -s -march=i686 -ffast-math avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../avs2pipemod.exe
         ;;
     debug )
         make_version.h
