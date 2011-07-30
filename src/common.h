@@ -35,8 +35,4 @@ enum A2pLogLevel {
 
 void a2p_log(int level, const char *message, ...);
 
-//double a2pm_gettime(void);
-
-int64_t a2pm_gettime(void);
-
 #endif // COMMON_H
