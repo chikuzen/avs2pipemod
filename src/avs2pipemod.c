@@ -73,6 +73,8 @@ typedef enum {
 typedef struct {
     int sar_x;
     int sar_y;
+    int start_frame;
+    int end_frame;
     char ip;
     fmt_type fmt_type;
     char *bit;
@@ -98,6 +100,10 @@ static const AVS_VideoInfo *
 avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
                         const char *filter, const char *matrix, a2pm_bool is_interlaced);
 
+static const AVS_VideoInfo *
+avisynth_filter_trim(AVS_Clip *clip, AVS_ScriptEnvironment *env, const AVS_VideoInfo *info,
+                     int start_frame, int end_frame);
+
 static AVS_Clip * avisynth_source(char *file, AVS_ScriptEnvironment *env);
 
 static int64_t a2pm_gettime(void);
@@ -112,7 +118,7 @@ static void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *para
 
 static void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, a2pm_bool need_audio);
 
-static void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input);
+static void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, params *params);
 
 static void do_x264bd(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params);
 
@@ -126,16 +132,16 @@ static int a2pm_write_planar_frames(AVS_Clip *clip, const AVS_VideoInfo *info, y
 
 static int a2pm_write_packed_frames(AVS_Clip *clip, const AVS_VideoInfo *info);
 
-static void usage(char *binary);
+static void usage();
 
 int __cdecl
 main (int argc, char **argv)
 {
-    params a2pm_params = {0, 0, 'p', A2PM_NORMAL, NULL, A2P_ACTION_NOTHING};
+    params a2pm_params = {0, 0, 0, 0, 'p', A2PM_NORMAL, NULL, A2P_ACTION_NOTHING};
     parse_opts(argc, argv, &a2pm_params);
 
     if(a2pm_params.action == A2P_ACTION_NOTHING)
-        usage(argv[0]);
+        usage();
 
     char *input = argv[argc - 1];
     AVS_ScriptEnvironment *env = avs_create_script_environment(AVISYNTH_INTERFACE_VERSION);
@@ -159,7 +165,7 @@ main (int argc, char **argv)
             do_x264bd(clip, env, &a2pm_params);
             break;
         case A2P_ACTION_BENCHMARK:
-            do_benchmark(clip, env, input);
+            do_benchmark(clip, env, input, &a2pm_params);
             break;
         case A2P_ACTION_NOTHING: // Removing GCC warning, this action is handled above
             break;
@@ -231,6 +237,28 @@ avisynth_filter_rgb2yuv(AVS_Clip *clip, AVS_ScriptEnvironment *env,
     avs_release_value(val_clip);
     avs_release_value(val_return);
 
+    return avs_get_video_info(clip);
+}
+
+static const AVS_VideoInfo *
+avisynth_filter_trim(AVS_Clip *clip, AVS_ScriptEnvironment *env,
+                     const AVS_VideoInfo *info, int start_frame, int end_frame)
+{
+    AVS_Value val_clip = avs_new_value_clip(clip);
+    avs_release_clip(clip);
+
+    AVS_Value val_array[3] =
+        {val_clip, avs_new_value_int(start_frame), avs_new_value_int(end_frame)};
+    AVS_Value val_return =
+        avs_invoke(env, "Trim", avs_new_value_array(val_array, 3), 0);
+    if(avs_is_error(val_return))
+        a2p_log(A2P_LOG_ERROR, "Trim failed.\n");
+
+    clip = avs_take_clip(val_return, env);
+    avs_release_value(val_clip);
+    avs_release_value(val_return);
+
+    a2p_log(A2P_LOG_INFO, "set frame number %d as first frame.\n", start_frame);
     return avs_get_video_info(clip);
 }
 
@@ -306,6 +334,9 @@ static void do_audio(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
 
     if(!avs_has_audio(info))
         a2p_log(A2P_LOG_ERROR, "clip has no audio.\n", 0);
+
+    if(avs_has_video(info) && (params->start_frame || params->end_frame))
+        info = avisynth_filter_trim(clip, env, info, params->start_frame, params->end_frame);
 
     if(params->bit) {
         a2p_log(A2P_LOG_INFO, "converting audio to %s.\n", params->bit);
@@ -407,6 +438,9 @@ static void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
     if(!avs_has_video(info))
         a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
 
+    if(params->start_frame || params->end_frame)
+        info = avisynth_filter_trim(clip, env, info, params->start_frame, params->end_frame);
+
     if(avs_is_field_based(info)) {
         a2p_log(A2P_LOG_WARNING, "clip is FieldBased.\n");
         fprintf(stderr, "           yuv4mpeg2's spec doesn't support fieldbased clip.\n"
@@ -444,7 +478,7 @@ static void do_y4m(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *params)
     }
     #else
     if((info->pixel_type != AVS_CS_I420) && (info->pixel_type != AVS_CS_YV12)) {
-        if(info->width & 1 || info->height & 1 || (params->ip != 'p' && info->height % 4))
+        if(info->width & 1 || info->height & 1 || (params->ip != 'p' && info->height & 3))
             a2p_log(A2P_LOG_ERROR, "invalid resolution, converting failed.\n");
         else if(avs_is_rgb(info)) {
             a2p_log(A2P_LOG_INFO, "converting video to planar yuv420 with %s coefficients.\n", matrix);
@@ -499,6 +533,9 @@ static void do_rawvideo(AVS_Clip *clip, AVS_ScriptEnvironment *env, params *para
 
     if(!avs_has_video(info))
         a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
+
+    if(params->start_frame || params->end_frame)
+        info = avisynth_filter_trim(clip, env, info, params->start_frame, params->end_frame);
 
     if(params->fmt_type == A2PM_EXTRA) {
         info = avisynth_filter(clip, env, info, "FlipVertical");
@@ -606,7 +643,7 @@ static void do_info(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, a2p
     }
 }
 
-static void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input)
+static void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input, params *params)
 {
     const AVS_VideoInfo *info = avs_get_video_info(clip);
 
@@ -614,6 +651,9 @@ static void do_benchmark(AVS_Clip *clip, AVS_ScriptEnvironment *env, char *input
         a2p_log(A2P_LOG_ERROR, "clip has no video.\n");
 
     do_info(clip, env, input, A2PM_FALSE);
+
+    if(params->start_frame || params->end_frame)
+        info = avisynth_filter_trim(clip, env, info, params->start_frame, params->end_frame);
 
     AVS_VideoFrame *frame;
     int count = info->num_frames / BM_FRAMES_PAR_OUT;
@@ -842,6 +882,7 @@ static void parse_opts(int argc, char **argv, params *params)
         {"x264bdp",  optional_argument, NULL, 'x'},
         {"x264bdt",  optional_argument, NULL, 'y'},
         {"benchmark",      no_argument, NULL, 'B'},
+        {"trim",     required_argument, NULL, 'T'},
         {0,0,0,0}
     };
     int parse = 0;
@@ -904,6 +945,9 @@ static void parse_opts(int argc, char **argv, params *params)
                 break;
             case 'B':
                 params->action = A2P_ACTION_BENCHMARK;
+                break;
+            case 'T':
+                sscanf(optarg, "%d,%d", &params->start_frame, &params->end_frame);
                 break;
             default:
                 params->action = A2P_ACTION_NOTHING;
@@ -1010,21 +1054,24 @@ static int a2pm_write_packed_frames(AVS_Clip *clip, const AVS_VideoInfo *info)
     return wrote;
 }
 
-static void usage(char *binary)
+static void usage()
 {
     #ifdef A2P_AVS26
-        fprintf(stderr, "avs2pipemod for AviSynth 2.6.0 Alpha 2 or later");
+        char *binary = "avs2pipe26mod";
+        fprintf(stderr, "avs2pipemod for AviSynth 2.6.0 Alpha 3 or later");
     #else
-        fprintf(stderr, "avs2pipemod for AviSynth 2.5x");
+        char *binary = "avs2pipemod";
+        fprintf(stderr, "avs2pipemod for AviSynth 2.5x or later");
     #endif
 
     fprintf(stderr,
             "  %s\n"
             "build on %s\n"
             "\n"
-            "Usage: %s [one option] input.avs\n"
+            "Usage: %s [option] input.avs\n"
             "  e.g. avs2pipemod -wav=24bit input.avs > output.wav\n"
             "       avs2pipemod -y4mt=10:11 input.avs | x264 - --demuxer y4m -o tff.mkv\n"
+            "       avs2pipemod -rawvideo -trim=1000,0 input.avs > output.yuv\n"
             "\n"
             "   -wav[=8bit|16bit|24bit|32bit|float  default unset]\n"
             "       output wav format audio to stdout.\n"
@@ -1055,7 +1102,7 @@ static void usage(char *binary)
             "       suggest x264(r1939 or later) arguments for bluray disc encoding\n"
             "      in case of progressive source.\n"
             "       set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
-            "   -x264bdt[=4:3  default uset(16:9)]\n"
+            "   -x264bdt[=4:3  default unset(16:9)]\n"
             "       suggest x264(r1939 or later) arguments for bluray disc encoding\n"
             "      in case of tff source.\n"
             "       set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
@@ -1063,6 +1110,10 @@ static void usage(char *binary)
             "   -info  - output information about aviscript clip.\n"
             "\n"
             "   -benchmark - do benchmark aviscript, and output results to stdout.\n"
+            "\n"
+            "   -trim[=first_frame,last_frame  default 0,0]\n"
+            "       add Trim(first_frame,last_frame) to input script.\n"
+            "       in info/x264bd, this option is ignored.\n"
             "\n"
             "note  : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
             "       will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"

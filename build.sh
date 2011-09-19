@@ -30,8 +30,8 @@ case $1 in
     make )
         make_version.h
         cd src
-        gcc -Wall -O3 -std=gnu99 -s -DA2P_AVS26 -march=i686 -ffast-math -fomit-frame-pointer avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../avs2pipe26mod.exe
-        gcc -Wall -O3 -std=gnu99 -s -march=i686 -ffast-math -fomit-frame-pointer avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../avs2pipemod.exe
+        gcc -Wall -Os -std=gnu99 -s -DA2P_AVS26 -fstrength-reduce -march=i686 -mfpmath=sse -msse -ffast-math avs2pipemod.c common.c wave.c avisynth26/avisynth.lib -o ../avs2pipe26mod.exe
+        gcc -Wall -Os -std=gnu99 -s -fstrength-reduce -march=i686 -mfpmath=sse -ffast-math -msse avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../avs2pipemod.exe
         ;;
     debug )
         make_version.h
@@ -40,11 +40,11 @@ case $1 in
         gcc -Wall -g -std=gnu99 avs2pipemod.c common.c wave.c avisynth25/avisynth.lib -o ../a2pm_dbg.exe
         ;;
     clean )
-        rm ./*avs2pipe*.exe ./*_dbg.exe
-        rm src/version.h
+        rm -f avs2pipe*.exe *_dbg.exe
+        rm -f src/version.h
         ;;
     package )
-        7z a -tzip avs2pipemod-`date -u +"%Y%m%d"` ./*avs2pipe*.exe ./*_dbg.exe ./*.txt
+        7z a -tzip avs2pipemod-`date -u +"%Y%m%d"` *.exe *.txt
         ;;
     *)
         usage
