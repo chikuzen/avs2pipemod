@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2010-2011 Oka Motofumi <chikuzen.mo at gmail dot com>
- *                         Chris Beswick <chris.beswick@gmail.com>
+ * Copyright (C) 2010-2012 Chris Beswick <chris.beswick@gmail.com>
+ *                         Oka Motofumi <chikuzen.mo at gmail dot com>
  *
  * This file is part of avs2pipemod.
  *
@@ -19,11 +19,11 @@
  *
  */
 
-#include "common.h"
+#include "stdlib.h"
+#include "avs2pipemod.h"
 #include "wave.h"
 
-void
-wave_guid_copy(WaveGuid *dst, WaveGuid *src)
+static void wave_guid_copy(WaveGuid *dst, WaveGuid *src)
 {
     dst->d1 = src->d1;
     dst->d2 = src->d2;
@@ -38,32 +38,50 @@ wave_guid_copy(WaveGuid *dst, WaveGuid *src)
     dst->d4[7] = src->d4[7];
 }
 
-WaveRiffHeader *
-wave_create_riff_header(WaveFormatType format,
-                        uint16_t       channels,
-                        uint32_t       sample_rate,
-                        uint16_t       byte_depth,
-                        uint64_t       samples)
+static uint32_t get_channel_mask(uint16_t channels)
+{
+    switch (channels) {
+    case 1:
+        return (uint32_t)(WAV_FC);
+    case 2:
+        return (uint32_t)(WAV_FL | WAV_FR);
+    case 3:
+        return (uint32_t)(WAV_FL | WAV_FR | WAV_BC);
+    case 4:
+        return (uint32_t)(WAV_FL | WAV_FR | WAV_BL | WAV_BR);
+    case 5:
+        return (uint32_t)(WAV_FL | WAV_FR | WAV_FC | WAV_BL | WAV_BR);
+    case 6:
+        return (uint32_t)(WAV_FL | WAV_FR | WAV_FC | WAV_LF | WAV_BL | WAV_BR);
+    case 7:
+        return (uint32_t)(WAV_FL | WAV_FR | WAV_FC | WAV_LF | WAV_BL | WAV_BR | WAV_BC);
+    case 8:
+        return (uint32_t)(WAV_FL | WAV_FR | WAV_FC | WAV_LF | WAV_BL | WAV_BR | WAV_FLC | WAV_FRC);
+    default:
+        break;
+    }
+    return 0;
+}
+
+WaveRiffHeader *wave_create_riff_header(wave_args_t *a)
 {
     WaveRiffHeader *header = malloc(sizeof(*header));
-    uint32_t data_size, riff_size, fact_samples;
+    uint32_t data_size;
+    uint32_t riff_size;
+    uint32_t fact_samples;
 
-    if(samples > UINT32_MAX) {
-        a2p_log(A2P_LOG_WARNING, "audio sample number over 32bit limit.\n");
+    fact_samples = (uint32_t)a->samples;
+    if(a->samples > UINT32_MAX) {
+        a2pm_log(A2PM_LOG_WARNING, "audio sample number over 32bit limit.\n");
         fact_samples = UINT32_MAX;
-    } else {
-        fact_samples = (uint32_t)samples;
     }
 
-    if((samples * channels * byte_depth + sizeof(*header)
-          - sizeof(header->riff.header)) > UINT32_MAX) {
-        a2p_log(A2P_LOG_WARNING, "audio size over 32bit limit (4GB)"
-                                 ", clients may truncate audio.\n");
+    data_size = fact_samples * a->channels * a->byte_depth;
+    riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
+    if (a->samples * a->channels * a->byte_depth + sizeof(*header) - sizeof(header->riff.header) > UINT32_MAX) {
+        a2pm_log(A2PM_LOG_WARNING, "audio size over 32bit limit (4GB), clients may truncate audio.\n");
         data_size = UINT32_MAX;
         riff_size = UINT32_MAX;
-    } else {
-        data_size = fact_samples * channels * byte_depth;
-        riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
     }
 
     header->riff.header.id      = WAVE_FOURCC('R', 'I', 'F', 'F');
@@ -73,12 +91,12 @@ wave_create_riff_header(WaveFormatType format,
     header->format.header.id    = WAVE_FOURCC('f', 'm', 't', ' ');
     header->format.header.size  = sizeof(header->format)
                                     - sizeof(header->format.header);
-    header->format.tag          = format;
-    header->format.channels     = channels;
-    header->format.sample_rate  = sample_rate;
-    header->format.byte_rate    = channels * sample_rate * byte_depth;
-    header->format.block_align  = channels * byte_depth;
-    header->format.bit_depth    = byte_depth * 8;
+    header->format.tag          = a->format;
+    header->format.channels     = a->channels;
+    header->format.sample_rate  = a->sample_rate;
+    header->format.byte_rate    = a->channels * a->sample_rate * a->byte_depth;
+    header->format.block_align  = a->channels * a->byte_depth;
+    header->format.bit_depth    = a->byte_depth * 8;
     header->format.ext_size     = 0;
     header->data.header.id      = WAVE_FOURCC('d', 'a', 't', 'a');
     header->data.header.size    = data_size;
@@ -86,37 +104,27 @@ wave_create_riff_header(WaveFormatType format,
     return header;
 }
 
-WaveRiffExtHeader *
-wave_create_riff_ext_header(WaveFormatType format,
-                            uint16_t       channels,
-                            uint32_t       sample_rate,
-                            uint16_t       byte_depth,
-                            uint64_t       samples)
+WaveRiffExtHeader *wave_create_riff_ext_header(wave_args_t *a)
 {
     WaveRiffExtHeader *header = malloc(sizeof(*header));
     WaveGuid sub_format = {WAVE_FORMAT_PCM, 0x0000, 0x0010,
-                            {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71} };
-    uint32_t data_size, riff_size, fact_samples;
+                            {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
-    sub_format.d1 = format;
+    sub_format.d1 = a->format;
     wave_guid_copy(&header->format.sub_format, &sub_format);
 
-    if(samples > UINT32_MAX) {
-        a2p_log(A2P_LOG_WARNING, "audio sample number over 32bit limit.\n");
+    uint32_t fact_samples = (uint32_t)a->samples;
+    if(a->samples > UINT32_MAX) {
+        a2pm_log(A2PM_LOG_WARNING, "audio sample number over 32bit limit.\n");
         fact_samples = UINT32_MAX;
-    } else {
-        fact_samples = (uint32_t) samples;
     }
 
-    if((samples * channels * byte_depth + sizeof(*header)
-          - sizeof(header->riff.header)) > UINT32_MAX) {
-        a2p_log(A2P_LOG_WARNING, "audio size over 32bit limit (4GB)"
-                                 ", clients may truncate audio.\n");
+    uint32_t data_size = fact_samples * a->channels * a->byte_depth;
+    uint32_t riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
+    if(a->samples * a->channels * a->byte_depth + sizeof(*header) - sizeof(header->riff.header) > UINT32_MAX) {
+        a2pm_log(A2PM_LOG_WARNING, "audio size over 32bit limit (4GB), clients may truncate audio.\n");
         data_size = UINT32_MAX;
         riff_size = UINT32_MAX;
-    } else {
-        data_size = fact_samples * channels * byte_depth;
-        riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
     }
 
     header->riff.header.id      = WAVE_FOURCC('R', 'I', 'F', 'F');
@@ -124,30 +132,28 @@ wave_create_riff_ext_header(WaveFormatType format,
     header->riff.type           = WAVE_FOURCC('W', 'A', 'V', 'E');
 
     header->format.header.id    = WAVE_FOURCC('f', 'm', 't', ' ');
-    header->format.header.size  = sizeof(header->format)
-                                    - sizeof(header->format.header);
+    header->format.header.size  = sizeof(header->format) - sizeof(header->format.header);
     header->format.tag          = WAVE_FORMAT_EXTENSIBLE;
-    header->format.channels     = channels;
-    header->format.sample_rate  = sample_rate;
-    header->format.byte_rate    = channels * sample_rate * byte_depth;
-    header->format.block_align  = channels * byte_depth;
-    header->format.bit_depth    = byte_depth * 8;
+    header->format.channels     = a->channels;
+    header->format.sample_rate  = a->sample_rate;
+    header->format.byte_rate    = a->channels * a->sample_rate * a->byte_depth;
+    header->format.block_align  = a->channels * a->byte_depth;
+    header->format.bit_depth    = a->byte_depth * 8;
     header->format.ext_size     = sizeof(header->format.valid_bits)
-                                    + sizeof(header->format.channel_mask)
-                                    + sizeof(header->format.sub_format);
-    header->format.valid_bits   = byte_depth * 8;
-    header->format.channel_mask = get_channel_mask(channels);
+                                + sizeof(header->format.channel_mask)
+                                + sizeof(header->format.sub_format);
+    header->format.valid_bits   = a->byte_depth * 8;
+    header->format.channel_mask = get_channel_mask(a->channels);
 
     header->fact.header.id      = WAVE_FOURCC('f', 'a', 'c', 't');
-    header->fact.header.size    = sizeof(header->fact)
-                                    - sizeof(header->fact.header);
+    header->fact.header.size    = sizeof(header->fact) - sizeof(header->fact.header);
     header->fact.samples        = fact_samples;
     header->data.header.id      = WAVE_FOURCC('d', 'a', 't', 'a');
     header->data.header.size    = data_size;
 
     return header;
 }
-
+/*
 WaveRf64Header *
 wave_create_rf64_header(WaveFormatType format,
                         uint16_t       channels,
@@ -200,44 +206,5 @@ wave_create_rf64_header(WaveFormatType format,
 
     return header;
 }
+*/
 
-uint32_t get_channel_mask(uint16_t channels)
-{
-    uint32_t mask;
-    switch (channels) {
-        case 1:
-            mask = (uint32_t)(FRONT_CENTER);
-            break;
-        case 2:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT);
-            break;
-        case 3:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT | BACK_CENTER);
-            break;
-        case 4:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT | BACK_LEFT | BACK_RIGHT);
-            break;
-        case 5:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT | FRONT_CENTER |
-                              BACK_LEFT | BACK_RIGHT);
-            break;
-        case 6:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT | FRONT_CENTER |
-                              LOW_FREQUENCY | BACK_LEFT | BACK_RIGHT);
-            break;
-        case 7:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT | FRONT_CENTER |
-                              LOW_FREQUENCY | BACK_LEFT | BACK_RIGHT | BACK_CENTER);
-            break;
-        case 8:
-            mask = (uint32_t)(FRONT_LEFT | FRONT_RIGHT | FRONT_CENTER |
-                              LOW_FREQUENCY | BACK_LEFT | BACK_RIGHT |
-                              FRONT_LEFT_OF_CENTER | FRONT_RIGHT_OF_CENTER);
-            break;
-        default:
-            mask = 0;
-            break;
-    }
-
-    return mask;
-}

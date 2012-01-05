@@ -1,9 +1,10 @@
 *.exe
 *.y4m
-*.w64
+*.yuv
+*.raw
 *.wav
+*.pcm
 
-*.txt
 *.log
 
 *.avs
@@ -24,5 +25,3 @@
 *.bz2
 *.xz
 *.lzma
-
-src/version.h

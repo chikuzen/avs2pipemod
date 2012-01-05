@@ -25,6 +25,8 @@
 #ifndef WAVE_H
 #define WAVE_H
 
+#include <stdint.h>
+
 typedef enum WaveFormatType WaveFormatType;
 typedef struct WaveGuid WaveGuid;
 typedef struct WaveChunkHeader WaveChunkHeader;
@@ -43,32 +45,6 @@ typedef struct WaveRf64Header WaveRf64Header;
     ((uint32_t)(uint8_t)(ch0) | ((uint32_t)(uint8_t)(ch1) << 8) |\
     ((uint32_t)(uint8_t)(ch2) << 16) | ((uint32_t)(uint8_t)(ch3) << 24 ))
 
-void
-wave_guid_copy(WaveGuid *dst, WaveGuid *src);
-
-WaveRiffHeader *
-wave_create_riff_header(WaveFormatType format,
-                        uint16_t       channels,
-                        uint32_t       sample_rate,
-                        uint16_t       byte_depth,
-                        uint64_t       samples);
-
-WaveRiffExtHeader *
-wave_create_riff_ext_header(WaveFormatType format,
-                            uint16_t       channels,
-                            uint32_t       sample_rate,
-                            uint16_t       byte_depth,
-                            uint64_t       samples);
-
-WaveRf64Header *
-wave_create_rf64_header(WaveFormatType format,
-                        uint16_t       channels,
-                        uint32_t       sample_rate,
-                        uint16_t       byte_depth,
-                        uint64_t       samples);
-
-uint32_t get_channel_mask(uint16_t channels);
-
 enum WaveFormatType {
     WAVE_FORMAT_PCM         = 0x0001,   // samples are ints
     WAVE_FORMAT_IEEE_FLOAT  = 0x0003,   // samples are floats
@@ -76,17 +52,17 @@ enum WaveFormatType {
 };
 
 enum speaker_position {
-    FRONT_LEFT              = 0x0001,
-    FRONT_RIGHT             = 0x0002,
-    FRONT_CENTER            = 0x0004,
-    LOW_FREQUENCY           = 0x0008,
-    BACK_LEFT               = 0x0010,
-    BACK_RIGHT              = 0x0020,
-    FRONT_LEFT_OF_CENTER    = 0x0040,
-    FRONT_RIGHT_OF_CENTER   = 0x0080,
-    BACK_CENTER             = 0x0100,
-    SIDE_LEFT               = 0x0200,
-    SIDE_RIGHT              = 0x0400
+    WAV_FL  = 0x0001,
+    WAV_FR  = 0x0002,
+    WAV_FC  = 0x0004,
+    WAV_LF  = 0x0008,
+    WAV_BL  = 0x0010,
+    WAV_BR  = 0x0020,
+    WAV_FLC = 0x0040,
+    WAV_FRC = 0x0080,
+    WAV_BC  = 0x0100,
+    WAV_SL  = 0x0200,
+    WAV_SR  = 0x0400
 };
 
 // set packing alignment to 1 byte so we can just fwrite structs
@@ -190,5 +166,16 @@ struct WaveRf64Header {
 // pop previous packing alignment
 #pragma pack(pop)
 
+typedef struct {
+    WaveFormatType format;
+    uint16_t       channels;
+    uint32_t       sample_rate;
+    uint16_t       byte_depth;
+    uint64_t       samples;
+} wave_args_t;
+
+WaveRiffHeader *wave_create_riff_header(wave_args_t *a);
+WaveRiffExtHeader *wave_create_riff_ext_header(wave_args_t *a);
+//WaveRf64Header *wave_create_rf64_header(wave_args_t *a);
 
 #endif // WAVE_H

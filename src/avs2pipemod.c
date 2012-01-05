@@ -1,10 +1,5 @@
 /*
- * avs2pipemod
- * Copyright (C) 2010-2011 Oka Motofumi <chikuzen.mo at gmail dot com>
- *                         Chris Beswick <chris.beswick@gmail.com>
- *
- * YUV4MPEG2 output inspired by Avs2YUV by Loren Merritt
- * Measurement of time and avs filter handling inspired by x264cli by x264 team
+ * Copyright (C) 2012 Oka Motofumi <chikuzen.mo at gmail dot com>
  *
  * This file is part of avs2pipemod.
  *
@@ -19,127 +14,122 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with avs2pipemod.  If not, see <http://www.gnu.org/licenses/>.
+ * along with avs2pipe.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
-#include <fcntl.h>
-#include <io.h>
-#include <string.h>
-#include <sys/timeb.h>
-#include <time.h>
+#include <stdio.h>
 #include <getopt.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "common.h"
-#include "wave.h"
+#include "avs2pipemod.h"
+#include "avs_func.h"
 
-#include "version.h"
+extern int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+extern int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+extern int act_do_info(params_t *pr, avs_hnd_t *ah);
+extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah);
 
-#define BM_FRAMES_PAR_OUT       50
-#define Y4M_FRAME_HEADER_STRING "FRAME\n"
-#define Y4M_FRAME_HEADER_SIZE   6
-#define BUFSIZE_OF_STDOUT       (128*1024) // 128KiB. The optimum value might be smaller than this.
-#define A2PM_BT601              "Rec601"
-#define A2PM_BT709              "Rec709"
-
-enum a2p_action {
-    A2P_ACTION_AUDIO,
-    A2P_ACTION_Y4M,
-    A2P_ACTION_RAWVIDEO,
-    A2P_ACTION_INFO,
-    A2P_ACTION_X264BD,
-    A2P_ACTION_BENCHMARK,
-    A2P_ACTION_NOTHING
-};
-
-typedef enum {
-    A2PM_FALSE,
-    A2PM_TRUE
-} a2pm_bool;
-
-typedef enum {
-    A2PM_RAW,
-    A2PM_NORMAL,
-    A2PM_EXTRA,
-    A2PM_EXTRA2
-} fmt_type;
-
-typedef struct {
-    int sar_x;
-    int sar_y;
-    int start_frame;
-    int end_frame;
-    char ip;
-    fmt_type fmt_type;
-    char *bit;
-    enum a2p_action action;
-} params;
-
-typedef struct {
-    int num_planes; // Y8 -> 1, others -> 3
-    int h_uv;       // horizontal subsampling of chroma
-    int v_uv;       // vertial subsampling of chroma
-    char *y4m_ctag_value;  // 
-} yuvout;
-
-static void parse_opts(int argc, char **argv, params *params);
-
-static void usage();
-
-#include "avisynth_filters.c"
-#include "actions.c"
-
-int __cdecl main(int argc, char **argv)
+static float a2pm_get_avs_version(avs_hnd_t *ah)
 {
-    params a2pm_params = {0, 0, 0, 0, 'p', A2PM_NORMAL, NULL, A2P_ACTION_NOTHING};
-    parse_opts(argc, argv, &a2pm_params);
-
-    if(a2pm_params.action == A2P_ACTION_NOTHING)
-        usage();
-
-    char *input = argv[argc - 1];
-    AVS_ScriptEnvironment *env = avs_create_script_environment(AVISYNTH_INTERFACE_VERSION);
-    AVS_Clip *clip = avisynth_source(input, env);
-
-    switch(a2pm_params.action)
-    {
-        case A2P_ACTION_AUDIO:
-            do_audio(clip, env, &a2pm_params);
-            break;
-        case A2P_ACTION_Y4M:
-            do_y4m(clip, env, &a2pm_params);
-            break;
-        case A2P_ACTION_RAWVIDEO:
-            do_rawvideo(clip, env, &a2pm_params);
-            break;
-        case A2P_ACTION_INFO:
-            do_info(clip, env, input, A2PM_TRUE);
-            break;
-        case A2P_ACTION_X264BD:
-            do_x264bd(clip, env, &a2pm_params);
-            break;
-        case A2P_ACTION_BENCHMARK:
-            do_benchmark(clip, env, input, &a2pm_params);
-            break;
-        case A2P_ACTION_NOTHING: // Removing GCC warning, this action is handled above
-            break;
-    }
-
-    avs_release_clip(clip);
-    avs_delete_script_environment(env);
-
-    exit(0);
+    RETURN_IF_ERROR(!ah->func.avs_function_exists(ah->env, "VersionNumber" ), -1, "VersionNumber does not exist\n");
+    AVS_Value ver = ah->func.avs_invoke(ah->env, "VersionNumber", avs_new_value_array(NULL, 0), NULL);
+    RETURN_IF_ERROR(avs_is_error(ver), -1, "unable to determine avisynth version: %s\n", avs_as_error(ver));
+    RETURN_IF_ERROR(!avs_is_float(ver), -1, "VersionNumber did not return a float value\n");
+    float ret = avs_as_float(ver);
+    ah->func.avs_release_value(ver);
+    return ret;
 }
 
-static void parse_opts(int argc, char **argv, params *params)
+#define LOAD_AVS_FUNC(name, continue_on_fail)\
+{\
+    ah->func.name = (void*)GetProcAddress(ah->library, #name);\
+    if( !continue_on_fail && !ah->func.name )\
+        goto fail;\
+}
+
+static int a2pm_load_avs_dll(avs_hnd_t *ah)
+{
+    ah->library = LoadLibrary("avisynth");
+    if(!ah->library)
+        return -1;
+    LOAD_AVS_FUNC(avs_clip_get_error, 0 );
+    LOAD_AVS_FUNC(avs_create_script_environment, 0);
+    LOAD_AVS_FUNC(avs_delete_script_environment, 1);
+    LOAD_AVS_FUNC(avs_get_error, 1);
+    LOAD_AVS_FUNC(avs_get_frame, 0);
+    LOAD_AVS_FUNC(avs_get_audio, 0);
+    LOAD_AVS_FUNC(avs_get_version, 0);
+    LOAD_AVS_FUNC(avs_get_video_info, 0);
+    LOAD_AVS_FUNC(avs_function_exists, 0);
+    LOAD_AVS_FUNC(avs_invoke, 0);
+    LOAD_AVS_FUNC(avs_bit_blt, 0);
+    LOAD_AVS_FUNC(avs_release_clip, 0);
+    LOAD_AVS_FUNC(avs_release_value, 0);
+    LOAD_AVS_FUNC(avs_release_video_frame, 0);
+    LOAD_AVS_FUNC(avs_take_clip, 0);
+    return 0;
+fail:
+    FreeLibrary(ah->library);
+    return -1;
+}
+
+static AVS_Value a2pm_initialize_avs(params_t *pr, avs_hnd_t *ah)
+{
+    AVS_Value res = avs_void;
+
+    RETURN_IF_ERROR(a2pm_load_avs_dll(ah), res, "failed to load avisynth.dll\n");
+
+    ah->env = ah->func.avs_create_script_environment(AVS_INTERFACE_25);
+    if (ah->func.avs_get_error) {
+        const char *error = ah->func.avs_get_error(ah->env);
+        RETURN_IF_ERROR(error, res, "%s\n", error);
+    }
+
+    ah->version = a2pm_get_avs_version(ah);
+    RETURN_IF_ERROR(ah->version < 2.5, res, "couldn't find valid version of avisynth.dll\n")
+
+    AVS_Value arg = avs_new_value_string(pr->input);
+    res = ah->func.avs_invoke(ah->env, "Import", arg, NULL);
+    RETURN_IF_ERROR(avs_is_error(res), res, "%s\n", avs_as_string(res));
+#ifdef I_LOVE_GETTING_CRASH_THAN_SAFETY
+    AVS_Value mt_test = ah->func.avs_invoke(ah->env, "GetMTMode", avs_new_value_bool(0), NULL);
+    int mt_mode = avs_is_int(mt_test) ? avs_as_int(mt_test) : 0;
+    ah->func.avs_release_value(mt_test);
+    if (mt_mode > 0 && mt_mode < 5) {
+        AVS_Value temp = ah->func.avs_invoke(ah->env, "Distributor", res, NULL);
+        ah->func.avs_release_value(res);
+        res = temp;
+    }
+#endif
+    RETURN_IF_ERROR(!avs_is_clip(res), res, "'%s' didn't return a varid clip\n", pr->input);
+    ah->clip = ah->func.avs_take_clip(res, ah->env);
+    ah->vi = ah->func.avs_get_video_info(ah->clip);
+
+    return res;
+}
+
+static int a2pm_close_avs_dll(avs_hnd_t *ah)
+{
+    ah->func.avs_release_clip(ah->clip);
+    if(ah->func.avs_delete_script_environment) {
+        ah->func.avs_delete_script_environment(ah->env);
+    }
+    FreeLibrary(ah->library);
+    return 0;
+}
+
+static void parse_opts(int argc, char **argv, params_t *p)
 {
     char short_opts[] = "a::Bb::e::ip::t::v::w::x::";
     struct option long_opts[] = {
-        {"wav",      optional_argument, NULL, 'w'},
-        {"extwav",   optional_argument, NULL, 'e'},
-        {"rf64",     optional_argument, NULL, 'r'},
-        {"audio",    optional_argument, NULL, 'e'},
         {"rawaudio", optional_argument, NULL, 'a'},
+        {"extwav",   optional_argument, NULL, 'e'},
+        {"audio",    optional_argument, NULL, 'e'}, // for backward compatibility
+        {"wav",      optional_argument, NULL, 'w'},
+     //   {"rf64",     optional_argument, NULL, 'r'},
         {"y4mp",     optional_argument, NULL, 'p'},
         {"y4mt",     optional_argument, NULL, 't'},
         {"y4mb",     optional_argument, NULL, 'b'},
@@ -151,143 +141,142 @@ static void parse_opts(int argc, char **argv, params *params)
         {"trim",     required_argument, NULL, 'T'},
         {0,0,0,0}
     };
-    int parse = 0;
-    int index = 0;
 
-    while((parse = getopt_long_only(argc, argv, short_opts, long_opts, &index)) != -1) {
+    int index = 0;
+    int parse = 0;
+    p->action = A2PM_ACT_NOTHING;
+    while ((parse = getopt_long_only(argc, argv, short_opts, long_opts, &index)) != -1) {
         switch(parse) {
-            case 'a':
-            case 'e':
-            case 'w':
-            case 'r':
-                params->action = A2P_ACTION_AUDIO;
-                if(optarg)
-                    params->bit = optarg;
-                params->fmt_type = parse == 'e' ? A2PM_EXTRA :
-                                   parse == 'r' ? A2PM_EXTRA2 :
-                                   parse == 'a' ? A2PM_RAW :
-                                                  A2PM_NORMAL;
+        case 'a':
+        case 'e':
+        case 'w':
+   //     case 'r':
+            p->action = A2PM_ACT_AUDIO;
+            if(optarg)
+                p->bit = optarg;
+            p->format_type = parse == 'e' ? A2PM_FMT_WAVEFORMATEXTENSIBLE :
+                        //     parse == 'r' ? A2PM_FMT_RF64 :
+                             parse == 'a' ? A2PM_FMT_RAWAUDIO :
+                                            A2PM_FMT_WAVEFORMATEX;
+            break;
+        case 't':
+        case 'b':
+        case 'p':
+            p->action = A2PM_ACT_VIDEO;
+            p->format_type = A2PM_FMT_YUV4MPEG2;
+            p->frame_type = parse;
+            if (!optarg)
                 break;
-            case 't':
-            case 'b':
-            case 'p':
-                params->action = A2P_ACTION_Y4M;
-                params->fmt_type = A2PM_NORMAL;
-                if(optarg) {
-                    sscanf(optarg, "%d:%d", &(params->sar_x), &(params->sar_y));
-                    if(!(((params->sar_x > 0) && (params->sar_y >0)) ||
-                          (!params->sar_x && !params->sar_y))) {
-                        fprintf(stderr, "invalid argument \"%s\".\n\n", optarg);
-                        params->action = A2P_ACTION_NOTHING;
-                    }
-                }
-                params->ip = parse;
+            sscanf(optarg, "%d:%d", &p->sar[0], &p->sar[1]);
+            if (p->sar[0] < 0 || p->sar[1] < 0) {
+                a2pm_log(A2PM_LOG_ERROR, "invalid argument \"%s\".\n\n", optarg);
+                p->action = A2PM_ACT_NOTHING;
+            }
+            break;
+        case 'v':
+            p->action = A2PM_ACT_VIDEO;
+            p->format_type = A2PM_FMT_RAWVIDEO;
+            if (!optarg)
                 break;
-            case 'v':
-                params->action = A2P_ACTION_RAWVIDEO;
-                if(optarg && !strncmp(optarg, "vflip", 5))
-                    params->fmt_type = A2PM_EXTRA;
-                else
-                    params->fmt_type = A2PM_RAW;
+            if (!strncmp(optarg, "vflip", 5))
+                p->format_type = A2PM_FMT_RAWVIDEO_VFLIP;
+            break;
+        case 'i':
+            p->action = A2PM_ACT_INFO;
+            break;
+        case 'x':
+        case 'y':
+            p->action = A2PM_ACT_X264BD;
+            p->frame_type = parse == 'x' ? 'p' : 't';
+            if (!optarg)
                 break;
-            case 'i':
-                params->action = A2P_ACTION_INFO;
-                break;
-            case 'x':
-            case 'y':
-                params->action = A2P_ACTION_X264BD;
-                params->ip = parse == 'x' ? 'p' : 't';
-                params->sar_x = 1;
-                params->sar_y = 1;
-                if(optarg) {
-                    if(!strncmp(optarg, "4:3", 3)) {
-                        params->sar_x = 10;
-                        params->sar_y = 11;
-                    } else {
-                        fprintf(stderr, "invalid argument \"%s\".\n\n", optarg);
-                        params->action = A2P_ACTION_NOTHING;
-                    }
-                }
-                break;
-            case 'B':
-                params->action = A2P_ACTION_BENCHMARK;
-                break;
-            case 'T':
-                sscanf(optarg, "%d,%d", &params->start_frame, &params->end_frame);
-                break;
-            default:
-                params->action = A2P_ACTION_NOTHING;
+            if(strncmp(optarg, "4:3", 3)) {
+                a2pm_log(A2PM_LOG_ERROR, "invalid argument \"%s\".\n\n", optarg);
+                p->action = A2PM_ACT_NOTHING;
+            }
+            p->is_sdbd = 1;
+            break;
+        case 'B':
+            p->action = A2PM_ACT_BENCHMARK;
+            break;
+        case 'T':
+            sscanf(optarg, "%d,%d", &p->trim[0], &p->trim[1]);
+            break;
+        default:
+            break;
         }
     }
 }
 
 static void usage()
 {
-    #ifdef A2P_AVS26
-        char *binary = "avs2pipe26mod";
-        fprintf(stderr, "avs2pipemod for AviSynth 2.6.0 Alpha 3 or later");
-    #else
-        char *binary = "avs2pipemod";
-        fprintf(stderr, "avs2pipemod for AviSynth 2.5x or later");
-    #endif
-
     fprintf(stderr,
-            "  %s\n"
-            "build on %s\n"
+#ifdef I_LOVE_GETTING_CRASH_THAN_SAFETY
+            "avs2pipemod  rev.%s     with MT support\n"
+#else
+            "avs2pipemod  rev.%s\n"
+#endif
+            "built on %s %s\n"
             "\n"
-            "Usage: %s [option] input.avs\n"
+            "Usage: avs2pipemod [option] input.avs\n"
             "  e.g. avs2pipemod -wav=24bit input.avs > output.wav\n"
             "       avs2pipemod -y4mt=10:11 input.avs | x264 - --demuxer y4m -o tff.mkv\n"
             "       avs2pipemod -rawvideo -trim=1000,0 input.avs > output.yuv\n"
             "\n"
             "   -wav[=8bit|16bit|24bit|32bit|float  default unset]\n"
-            "       output wav format audio to stdout.\n"
-            "       if optional arg is set, bit depth of input will be converted\n"
-            "      to specified value.\n"
+            "        output wav format audio to stdout.\n"
+            "        if optional arg is set, bit depth of input will be converted\n"
+            "        to specified value.\n"
             "\n"
             "   -extwav[=8bit|16bit|24bit|32bit|float  default unset]\n"
-            "       output wav extensible format audio containing channel-mask to stdout.\n"
-            "       if optional arg is set, bit depth of input will be converted\n"
-            "      to specified value.\n"
+            "        output wav extensible format audio containing channel-mask to stdout.\n"
+            "        if optional arg is set, bit depth of input will be converted\n"
+            "        to specified value.\n"
             "\n"
             "   -rawaudio[=8bit|16bit|24bit|32bit|float  default unset]\n"
-            "       output raw pcm audio(without any header) to stdout.\n"
-            "       if optional arg is set, bit depth of input will be converted\n"
-            "      to specified value.\n"
+            "        output raw pcm audio(without any header) to stdout.\n"
+            "        if optional arg is set, bit depth of input will be converted\n"
+            "        to specified value.\n"
             "\n"
             "   -y4mp[=sar  default 0:0]\n"
-            "       output yuv4mpeg2 format video to stdout as progressive.\n"
+            "        output yuv4mpeg2 format video to stdout as progressive.\n"
             "   -y4mt[=sar  default 0:0]\n"
-            "       output yuv4mpeg2 format video to stdout as tff interlaced.\n"
+            "        output yuv4mpeg2 format video to stdout as tff interlaced.\n"
             "   -y4mb[=sar  default 0:0]\n"
-            "       output yuv4mpeg2 format video to stdout as bff interlaced.\n"
+            "        output yuv4mpeg2 format video to stdout as bff interlaced.\n"
             "\n"
             "   -rawvideo[=vflip default unset]\n"
-            "       output rawvideo(without any header) to stdout.\n"
+            "        output rawvideo(without any header) to stdout.\n"
             "\n"
             "   -x264bdp[=4:3  default unset(16:9)]\n"
-            "       suggest x264(r1939 or later) arguments for bluray disc encoding\n"
-            "      in case of progressive source.\n"
-            "       set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
+            "        suggest x264(r1939 or later) arguments for bluray disc encoding\n"
+            "        in case of progressive source.\n"
+            "        set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
             "   -x264bdt[=4:3  default unset(16:9)]\n"
-            "       suggest x264(r1939 or later) arguments for bluray disc encoding\n"
-            "      in case of tff source.\n"
-            "       set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
+            "        suggest x264(r1939 or later) arguments for bluray disc encoding\n"
+            "        in case of tff source.\n"
+            "        set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
             "\n"
             "   -info  - output information about aviscript clip.\n"
             "\n"
             "   -benchmark - do benchmark aviscript, and output results to stdout.\n"
             "\n"
             "   -trim[=first_frame,last_frame  default 0,0]\n"
-            "       add Trim(first_frame,last_frame) to input script.\n"
-            "       in info/x264bd, this option is ignored.\n"
+            "        add Trim(first_frame,last_frame) to input script.\n"
+            "        in info/x264bd, this option is ignored.\n"
             "\n"
-            "note  : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
-            "       will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
+            "note1 : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
+            "        will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
+            "        and, if your avisynth version is 2.5.x, YUY2 input will be converted\n"
+            "        to YV12.\n"
             "\n"
             "note2 : '-x264bdp/t' supports only for primary stream encoding.\n"
             "\n"
-            "note3 : '-extwav' supports only general speaker positions.\n"
+            "note3 : using for WAVEFORMATEX(-wav option) except 8bit/16bit PCM is violation\n"
+            "        of specification in fact."
+            "\n"
+            "note4 : '-extwav' supports only general speaker positions.\n"
+            "\n"
             " Chan. MS channels                Description\n"
             " ----- -------------------------  ----------------\n"
             "  1    FC                         Mono\n"
@@ -297,7 +286,58 @@ static void usage()
             "  5    FL FR FC BL BR             like Dpl II (without LFE)\n"
             "  6    FL FR FC LF BL BR          Standard Surround\n"
             "  7    FL FR FC LF BL BR BC       With back center\n"
-            "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n"
-            , A2PM_VERSION, A2PM_DATE_OF_BUILD, binary);
-    exit(2);
+            "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n",
+            A2PM_VERSION, __DATE__, __TIME__);
+}
+
+int main(int argc, char **argv)
+{
+    int retcode = -1;
+
+    if (argc < 3) {
+        usage();
+        goto ret;
+    }
+
+    params_t params = { 0 };
+    parse_opts(argc, argv, &params);
+
+    if (params.action == A2PM_ACT_NOTHING) {
+        usage();
+        goto ret;
+    }
+    params.input = argv[argc - 1];
+
+    avs_hnd_t avs_h = { 0 };
+    AVS_Value res = a2pm_initialize_avs(&params, &avs_h);
+    if (!avs_defined(res))
+        goto close;
+
+    switch(params.action) {
+    case A2PM_ACT_AUDIO:
+        retcode = act_do_audio(&params, &avs_h, res);
+        break;
+    case A2PM_ACT_VIDEO:
+        retcode = act_do_video(&params, &avs_h, res);
+        break;
+    case A2PM_ACT_INFO:
+        retcode = act_do_info(&params, &avs_h);
+        break;
+    case A2PM_ACT_X264BD:
+        retcode = act_do_x264bd(&params, &avs_h);
+        break;
+    case A2PM_ACT_BENCHMARK:
+        retcode = act_do_benchmark(&params, &avs_h, res);
+        break;
+    default:
+        break;
+    }
+
+close:
+    if (avs_defined(res))
+        avs_h.func.avs_release_value(res);
+    if(avs_h.library)
+        a2pm_close_avs_dll(&avs_h);
+ret:
+    exit(retcode);
 }

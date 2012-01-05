@@ -18,36 +18,38 @@
  *
  */
 
-#include "common.h"
+#include <stdarg.h>
+#include <stdio.h>
 
-void a2p_log(int level, const char *message, ...)
+#include "avs2pipemod.h"
+
+void a2pm_log(log_level_t level, const char *message, ...)
 {
     char *prefix;
     va_list args;
 
     va_start(args, message);
 
-    switch(level)
-    {
-        case A2P_LOG_ERROR:
-            prefix = "error";
-            break;
-        case A2P_LOG_WARNING:
-            prefix = "warn";
-            break;
-        case A2P_LOG_INFO:
-        case A2P_LOG_REPEAT:
-            prefix = "info";
-            break;
-        default:
-            prefix = "unknown";
-            break;
+    switch(level) {
+    case A2PM_LOG_ERROR:
+        prefix = "error";
+        break;
+    case A2PM_LOG_WARNING:
+        prefix = "warning";
+        break;
+    case A2PM_LOG_INFO:
+    case A2PM_LOG_REPEAT:
+        prefix = "info";
+        break;
+    default:
+        prefix = "unknown";
+        break;
     }
 
-    if(level == A2P_LOG_REPEAT) fprintf(stderr, "\r");
-    fprintf(stderr, "avs2pipemod [%s]: ", prefix);
+    if(level == A2PM_LOG_REPEAT)
+        fprintf(stderr, "\r");
+    fprintf(stderr, "avs2pipemod[%s]: ", prefix);
     vfprintf(stderr, message, args);
 
     va_end(args);
-    if(level == A2P_LOG_ERROR) exit(2);
 }
