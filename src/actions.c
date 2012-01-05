@@ -590,7 +590,7 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
 
     if (pr->is_sdbd) {
         pr->sar[0] = ah->vi->height == 576 ? 12 : 10;
-        pr->sar[1] = ah->vi->height == 576 ? 11 : 11;
+        pr->sar[1] = 11;
     }
 
     fprintf(stdout,
