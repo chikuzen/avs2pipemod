@@ -50,7 +50,7 @@ static int64_t get_current_time(void)
 
 static AVS_Value update_clip(avs_hnd_t *ah, AVS_Value res, AVS_Value release)
 {
-    if (!avs_is_error(res)) {
+    if (!avs_is_error(res)) { /* If res is error, clip will be released at the last of main(). */
         ah->func.avs_release_clip(ah->clip);
         ah->clip = ah->func.avs_take_clip(res, ah->env);
         ah->vi = ah->func.avs_get_video_info(ah->clip);
@@ -164,13 +164,13 @@ static int write_packed_frames(avs_hnd_t *ah)
     RETURN_IF_ERROR(!buff, 0, "malloc failed.\n");
 
     int wrote;
-    for(wrote = 0; wrote < ah->vi->num_frames; wrote++) {
+    for (wrote = 0; wrote < ah->vi->num_frames; wrote++) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
         ah->func.avs_bit_blt(ah->env, buff, width, avs_get_read_ptr(frame),
                              avs_get_pitch(frame), width, ah->vi->height);
         size_t step = fwrite(buff, sizeof(BYTE), count, stdout);
         ah->func.avs_release_video_frame(frame);
-        if(step != count)
+        if (step != count)
             break;
     }
     free(buff);
@@ -185,7 +185,7 @@ static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
     int width[num_planes];
     int height[num_planes];
     int buff_inc[num_planes];
-    for(int p = 0; p < num_planes; p++) {
+    for (int p = 0; p < num_planes; p++) {
         width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
         height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
         buff_inc[p] = width[p] * height[p];
@@ -207,14 +207,14 @@ static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
     for (wrote = 0; wrote < ah->vi->num_frames; wrote++) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
         BYTE *buff_ptr = buff_0;
-        for(int p = 0; p < num_planes; p++) {
+        for (int p = 0; p < num_planes; p++) {
             ah->func.avs_bit_blt(ah->env, buff_ptr, width[p], avs_get_read_ptr_p(frame, planes[p]),
                                  avs_get_pitch_p(frame, planes[p]), width[p], height[p]);
             buff_ptr += buff_inc[p];
         }
         size_t step = fwrite(buff, sizeof(BYTE), count, stdout);
         ah->func.avs_release_video_frame(frame);
-        if(step != count)
+        if (step != count)
             break;
     }
     free(buff);
@@ -241,7 +241,7 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
                  "               input a number and press enter : ");
         int k;
         fscanf(stdin, "%d", &k);
-        switch(k) {
+        switch (k) {
         case 1:
             res = invoke_filter(ah, res, "AssumeFrameBased");
             RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke AssumeFrameBased()\n")
@@ -347,7 +347,7 @@ int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     int64_t start = get_current_time();
 
-    if(pr->format_type == A2PM_FMT_RAWAUDIO)
+    if (pr->format_type == A2PM_FMT_RAWAUDIO)
         goto skip_rawaudio;
 
     WaveFormatType format = ah->vi->sample_type == AVS_SAMPLE_FLOAT ?
@@ -410,7 +410,7 @@ int act_do_info(params_t *pr, avs_hnd_t *ah)
     fprintf(stdout, "avisynth_version %.2f\n"
                     "script_name      %s\n",
                     ah->version, pr->input);
-    if(avs_has_video(ah->vi)) {
+    if (avs_has_video(ah->vi)) {
         fprintf(stdout,
                 "v:width          %d\n"
                 "v:height         %d\n"
@@ -423,7 +423,7 @@ int act_do_info(params_t *pr, avs_hnd_t *ah)
                 !avs_is_field_based(ah->vi) ? "framebased" : "fieldbased");
 
         char *field_order;
-        switch(ah->vi->image_type) {
+        switch (ah->vi->image_type) {
             case 1:
             case 5:
                 field_order = "assumed bottom field first";
@@ -441,7 +441,7 @@ int act_do_info(params_t *pr, avs_hnd_t *ah)
                 field_order, get_string_from_pix(ah->vi->pixel_type, TYPE_INFO));
     }
 
-    if(avs_has_audio(ah->vi) && pr->action == A2PM_ACT_INFO) {
+    if (avs_has_audio(ah->vi) && pr->action == A2PM_ACT_INFO) {
         fprintf(stdout,
                 "a:sample_rate    %d\n"
                 "a:format         %s\n"
@@ -462,7 +462,7 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
 
-    if(pr->trim[0] || pr->trim[1]) {
+    if (pr->trim[0] || pr->trim[1]) {
         res = invoke_trim(pr, ah, res);
         RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Trim.\n");
     }
@@ -478,18 +478,18 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     int64_t start = get_current_time();
 
-    while(passed < surplus) {
+    while (passed < surplus) {
         frame = ah->func.avs_get_frame(ah->clip, passed);
         ah->func.avs_release_video_frame(frame);
         passed++;
     }
 
-    while(passed < ah->vi->num_frames) {
+    while (passed < ah->vi->num_frames) {
         elapsed = get_current_time() - start;
         a2pm_log(A2PM_LOG_REPEAT, "[elapsed %.3f sec] %d/%d frames [%3d%%][%.3ffps]",
                  elapsed / 1000000.0, passed, ah->vi->num_frames,
                  passed * 100 / ah->vi->num_frames, passed * 1000000.0 / elapsed);
-        for(int f = 0; f < BM_FRAMES_PAR_OUT; f++) {
+        for (int f = 0; f < BM_FRAMES_PAR_OUT; f++) {
             frame = ah->func.avs_get_frame(ah->clip, passed);
             ah->func.avs_release_video_frame(frame);
             passed++;
@@ -509,25 +509,25 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
     RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->is_sdbd, -1,
                     "DAR 4:3 is supported only NTSC/PAL SD source\n");
 
-    static const struct {
+    const struct {
         int width;
         int height;
         int fpsnum;
         int fpsden;
         char frame_type;
         int keyint;
-        char *pulldown_flag;
+        char *flag;
         int sar_x;
         int sar_y;
         char* color;
     } bd_spec_table[] = {
         /* 1080p24 */
-        {1920, 1080, 24000, 1001, 'p', 24,                  "",  1,  1,     "bt709"},
-        {1920, 1080,    24,    1, 'p', 24,                  "",  1,  1,     "bt709"},
-        {1920, 1080,  2997,  125, 'p', 24,                  "",  1,  1,     "bt709"},
-        {1440, 1080, 24000, 1001, 'p', 24,                  "",  4,  3,     "bt709"},
-        {1440, 1080,    24,    1, 'p', 24,                  "",  4,  3,     "bt709"},
-        {1440, 1080,  2997,  125, 'p', 24,                  "",  4,  3,     "bt709"},
+        {1920, 1080, 24000, 1001, 'p', 24, ""                 ,  1,  1,     "bt709"},
+        {1920, 1080,    24,    1, 'p', 24, ""                 ,  1,  1,     "bt709"},
+        {1920, 1080,  2997,  125, 'p', 24, ""                 ,  1,  1,     "bt709"},
+        {1440, 1080, 24000, 1001, 'p', 24, ""                 ,  4,  3,     "bt709"},
+        {1440, 1080,    24,    1, 'p', 24, ""                 ,  4,  3,     "bt709"},
+        {1440, 1080,  2997,  125, 'p', 24, ""                 ,  4,  3,     "bt709"},
         /* 1080p25 */
         {1920, 1080,    25,    1, 'p', 25, "--fake-interlaced",  1,  1,     "bt709"},
         {1440, 1080,    25,    1, 'p', 25, "--fake-interlaced",  4,  3,     "bt709"},
@@ -537,39 +537,41 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
         {1440, 1080, 30000, 1001, 'p', 30, "--fake-interlaced",  4,  3,     "bt709"},
         {1440, 1080,  2997,  100, 'p', 30, "--fake-interlaced",  4,  3,     "bt709"},
         /* 1080i25*/
-        {1920, 1080,    25,    1, 't', 25,             "--tff",  1,  1,     "bt709"},
-        {1440, 1080,    25,    1, 't', 25,             "--tff",  4,  3,     "bt709"},
+        {1920, 1080,    25,    1, 't', 25, "--tff"            ,  1,  1,     "bt709"},
+        {1440, 1080,    25,    1, 't', 25, "--tff"            ,  4,  3,     "bt709"},
         /* 1080i30 */
-        {1920, 1080, 30000, 1001, 't', 30,             "--tff",  1,  1,     "bt709"},
-        {1920, 1080,  2997,  100, 't', 30,             "--tff",  1,  1,     "bt709"},
-        {1440, 1080, 30000, 1001, 't', 30,             "--tff",  4,  3,     "bt709"},
-        {1440, 1080,  2997,  100, 't', 30,             "--tff",  4,  3,     "bt709"},
+        {1920, 1080, 30000, 1001, 't', 30, "--tff"            ,  1,  1,     "bt709"},
+        {1920, 1080,  2997,  100, 't', 30, "--tff"            ,  1,  1,     "bt709"},
+        {1920, 1080,    30,    1, 't', 30, "--tff"            ,  1,  1,     "bt709"},
+        {1440, 1080, 30000, 1001, 't', 30, "--tff"            ,  4,  3,     "bt709"},
+        {1440, 1080,  2997,  100, 't', 30, "--tff"            ,  4,  3,     "bt709"},
+        {1440, 1080,    30,    1, 't', 30, "--tff"            ,  4,  3,     "bt709"},
         /* 720p24 */
-        {1280,  720, 24000, 1001, 'p', 24,                  "",  1,  1,     "bt709"},
-        {1280,  720,    24,    1, 'p', 24,                  "",  1,  1,     "bt709"},
-        {1280,  720,  2997,  125, 'p', 24,                  "",  1,  1,     "bt709"},
+        {1280,  720, 24000, 1001, 'p', 24, ""                 ,  1,  1,     "bt709"},
+        {1280,  720,    24,    1, 'p', 24, ""                 ,  1,  1,     "bt709"},
+        {1280,  720,  2997,  125, 'p', 24, ""                 ,  1,  1,     "bt709"},
         /* 720p25 */
         {1280,  720,    25,    1, 'p', 25, "--pulldown double",  1,  1,     "bt709"},
         /* 720p30 */
         {1280,  720, 30000, 1001, 'p', 25, "--pulldown double",  1,  1,     "bt709"},
         /* 720p50 */
-        {1280,  720,    50,    1, 'p', 50,                  "",  1,  1,     "bt709"},
+        {1280,  720,    50,    1, 'p', 50, ""                 ,  1,  1,     "bt709"},
         /* 720p60 */
-        {1280,  720, 60000, 1001, 'p', 60,                  "",  1,  1,     "bt709"},
-        {1280,  720,  2997,   50, 'p', 60,                  "",  1,  1,     "bt709"},
+        {1280,  720, 60000, 1001, 'p', 60, ""                 ,  1,  1,     "bt709"},
+        {1280,  720,  2997,   50, 'p', 60, ""                 ,  1,  1,     "bt709"},
         /* 576p25 */
         { 720,  576,    25,    1, 'p', 25, "--fake-interlaced", 16, 11,   "bt470bg"},
         /* 576i25 */
-        { 720,  576,    25,    1, 't', 25,             "--tff", 16, 11,   "bt470bg"},
+        { 720,  576,    25,    1, 't', 25, "--tff"            , 16, 11,   "bt470bg"},
         /* 480p24 */
-        { 720,  480, 24000, 1001, 'p', 24,     "--pulldown 32", 40, 33, "smpte170m"},
+        { 720,  480, 24000, 1001, 'p', 24, "--pulldown 32"    , 40, 33, "smpte170m"},
         /* 480i30*/
-        { 720,  480, 30000, 1001, 't', 30,             "--tff", 40, 33, "smpte170m"},
+        { 720,  480, 30000, 1001, 't', 30, "--tff"            , 40, 33, "smpte170m"},
         {0}
     };
 
-    int keyint = 0;
-    char *flags = NULL;
+    int keyint  = 0;
+    char *flag  = NULL;
     char *color = NULL;
     for (int i = 0; bd_spec_table[i].width != 0; i++) {
         if (ah->vi->width == bd_spec_table[i].width
@@ -578,7 +580,7 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
          && ah->vi->fps_denominator == bd_spec_table[i].fpsden
          && pr->frame_type == bd_spec_table[i].frame_type) {
             keyint     = bd_spec_table[i].keyint;
-            flags      = bd_spec_table[i].pulldown_flag;
+            flag       = bd_spec_table[i].flag;
             color      = bd_spec_table[i].color;
             pr->sar[0] = bd_spec_table[i].sar_x;
             pr->sar[1] = bd_spec_table[i].sar_y;
@@ -605,6 +607,6 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
             " --colorprim %s"
             " --transfer %s"
             " --colormatrix %s",
-            keyint, flags, pr->sar[0], pr->sar[1], color, color, color);
+            keyint, flag, pr->sar[0], pr->sar[1], color, color, color);
     return 0;
 }
