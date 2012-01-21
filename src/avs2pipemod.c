@@ -32,7 +32,7 @@ extern int act_do_info(params_t *pr, avs_hnd_t *ah);
 extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah);
 
-static float a2pm_get_avs_version(avs_hnd_t *ah)
+static float get_avisynth_version(avs_hnd_t *ah)
 {
     RETURN_IF_ERROR(!ah->func.avs_function_exists(ah->env, "VersionNumber" ), -1, "VersionNumber does not exist\n");
     AVS_Value ver = ah->func.avs_invoke(ah->env, "VersionNumber", avs_new_value_array(NULL, 0), NULL);
@@ -50,7 +50,7 @@ static float a2pm_get_avs_version(avs_hnd_t *ah)
         goto fail;\
 }
 
-static int a2pm_load_avs_dll(avs_hnd_t *ah)
+static int load_avisynth_dll(avs_hnd_t *ah)
 {
     ah->library = LoadLibrary("avisynth");
     if(!ah->library)
@@ -76,11 +76,11 @@ fail:
     return -1;
 }
 
-static AVS_Value a2pm_initialize_avs(params_t *pr, avs_hnd_t *ah)
+static AVS_Value initialize_avisynth(params_t *pr, avs_hnd_t *ah)
 {
     AVS_Value res = avs_void;
 
-    RETURN_IF_ERROR(a2pm_load_avs_dll(ah), res, "failed to load avisynth.dll\n");
+    RETURN_IF_ERROR(load_avisynth_dll(ah), res, "failed to load avisynth.dll\n");
 
     ah->env = ah->func.avs_create_script_environment(AVS_INTERFACE_25);
     if (ah->func.avs_get_error) {
@@ -88,13 +88,13 @@ static AVS_Value a2pm_initialize_avs(params_t *pr, avs_hnd_t *ah)
         RETURN_IF_ERROR(error, res, "%s\n", error);
     }
 
-    ah->version = a2pm_get_avs_version(ah);
+    ah->version = get_avisynth_version(ah);
     RETURN_IF_ERROR(ah->version < 2.5, res, "couldn't find valid version of avisynth.dll\n")
 
     AVS_Value arg = avs_new_value_string(pr->input);
     res = ah->func.avs_invoke(ah->env, "Import", arg, NULL);
     RETURN_IF_ERROR(avs_is_error(res), res, "%s\n", avs_as_string(res));
-#ifdef I_LOVE_GETTING_CRASH_THAN_SAFETY
+#ifdef BLAME_THE_FLUFF /* see http://mod16.org/hurfdurf/?p=234 */
     AVS_Value mt_test = ah->func.avs_invoke(ah->env, "GetMTMode", avs_new_value_bool(0), NULL);
     int mt_mode = avs_is_int(mt_test) ? avs_as_int(mt_test) : 0;
     ah->func.avs_release_value(mt_test);
@@ -111,7 +111,7 @@ static AVS_Value a2pm_initialize_avs(params_t *pr, avs_hnd_t *ah)
     return res;
 }
 
-static int a2pm_close_avs_dll(avs_hnd_t *ah)
+static int close_avisynth_dll(avs_hnd_t *ah)
 {
     ah->func.avs_release_clip(ah->clip);
     if(ah->func.avs_delete_script_environment) {
@@ -127,10 +127,11 @@ static void parse_opts(int argc, char **argv, params_t *p)
     struct option long_opts[] = {
         {"rawaudio", optional_argument, NULL, 'a'},
         {"extwav",   optional_argument, NULL, 'e'},
-        {"audio",    optional_argument, NULL, 'e'}, // for backward compatibility
+        {"audio",    optional_argument, NULL, 'e'}, /* for backward compatibility */
         {"wav",      optional_argument, NULL, 'w'},
      //   {"rf64",     optional_argument, NULL, 'r'},
         {"y4mp",     optional_argument, NULL, 'p'},
+        {"video",    optional_argument, NULL, 'p'}, /* for backward compatibility */
         {"y4mt",     optional_argument, NULL, 't'},
         {"y4mb",     optional_argument, NULL, 'b'},
         {"rawvideo", optional_argument, NULL, 'v'},
@@ -139,7 +140,7 @@ static void parse_opts(int argc, char **argv, params_t *p)
         {"x264bdt",  optional_argument, NULL, 'y'},
         {"benchmark",      no_argument, NULL, 'B'},
         {"trim",     required_argument, NULL, 'T'},
-        {0,0,0,0}
+        {0, 0, 0, 0}
     };
 
     int index = 0;
@@ -211,7 +212,7 @@ static void parse_opts(int argc, char **argv, params_t *p)
 static void usage()
 {
     fprintf(stderr,
-#ifdef I_LOVE_GETTING_CRASH_THAN_SAFETY
+#ifdef BLAME_THE_FLUFF
             "avs2pipemod  rev.%s     with MT support\n"
 #else
             "avs2pipemod  rev.%s\n"
@@ -273,7 +274,7 @@ static void usage()
             "note2 : '-x264bdp/t' supports only for primary stream encoding.\n"
             "\n"
             "note3 : using for WAVEFORMATEX(-wav option) except 8bit/16bit PCM is violation\n"
-            "        of specification in fact."
+            "        of specification in fact.\n"
             "\n"
             "note4 : '-extwav' supports only general speaker positions.\n"
             "\n"
@@ -309,7 +310,7 @@ int main(int argc, char **argv)
     params.input = argv[argc - 1];
 
     avs_hnd_t avs_h = { 0 };
-    AVS_Value res = a2pm_initialize_avs(&params, &avs_h);
+    AVS_Value res = initialize_avisynth(&params, &avs_h);
     if (!avs_defined(res))
         goto close;
 
@@ -337,7 +338,7 @@ close:
     if (avs_defined(res))
         avs_h.func.avs_release_value(res);
     if(avs_h.library)
-        a2pm_close_avs_dll(&avs_h);
+        close_avisynth_dll(&avs_h);
 ret:
     exit(retcode);
 }

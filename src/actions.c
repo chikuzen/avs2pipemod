@@ -29,8 +29,8 @@
 #include "wave.h"
 #include "avs_func.h"
 
-#define BM_FRAMES_PAR_OUT     50
-#define Y4M_FRAME_HEADER      "FRAME\n"
+#define BM_FRAMES_PAR_OUT 50
+#define Y4M_FRAME_HEADER "FRAME\n"
 #define Y4M_FRAME_HEADER_SIZE 6
 
 typedef enum {
@@ -365,15 +365,15 @@ int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 #endif
     case A2PM_FMT_WAVEFORMATEXTENSIBLE:
         nope();
-        WaveRiffExtHeader *header_wav = wave_create_riff_ext_header(&args);
-        fwrite(header_wav, sizeof(*header_wav), 1, stdout);
-        free(header_wav);
+        WaveRiffExtHeader *header_ext = wave_create_riff_ext_header(&args);
+        fwrite(header_ext, sizeof(*header_ext), 1, stdout);
+        free(header_ext);
         break;
     case A2PM_FMT_WAVEFORMATEX:
         nope();
-        WaveRiffHeader *header_ext = wave_create_riff_header(&args);
-        fwrite(header_ext, sizeof(*header_ext), 1, stdout);
-        free(header_ext);
+        WaveRiffHeader *header_wav = wave_create_riff_header(&args);
+        fwrite(header_wav, sizeof(*header_wav), 1, stdout);
+        free(header_wav);
         break;
     default:
         break;
