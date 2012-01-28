@@ -66,18 +66,15 @@ static uint32_t get_channel_mask(uint16_t channels)
 WaveRiffHeader *wave_create_riff_header(wave_args_t *a)
 {
     WaveRiffHeader *header = malloc(sizeof(*header));
-    uint32_t data_size;
-    uint32_t riff_size;
-    uint32_t fact_samples;
 
-    fact_samples = (uint32_t)a->samples;
+    uint32_t fact_samples = (uint32_t)a->samples;
     if(a->samples > UINT32_MAX) {
         a2pm_log(A2PM_LOG_WARNING, "audio sample number over 32bit limit.\n");
         fact_samples = UINT32_MAX;
     }
 
-    data_size = fact_samples * a->channels * a->byte_depth;
-    riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
+    uint32_t data_size = fact_samples * a->channels * a->byte_depth;
+    uint32_t riff_size = data_size + sizeof(*header) - sizeof(header->riff.header);
     if (a->samples * a->channels * a->byte_depth + sizeof(*header) - sizeof(header->riff.header) > UINT32_MAX) {
         a2pm_log(A2PM_LOG_WARNING, "audio size over 32bit limit (4GB), clients may truncate audio.\n");
         data_size = UINT32_MAX;

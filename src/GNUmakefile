@@ -6,7 +6,7 @@ DOBJS = $(SRCS:%.c=%.d)
 CC = $(CROSS)gcc
 LD = $(CROSS)gcc
 
-CFLAGS = -Wall -std=gnu99 -I. -g0 -Os -ffast-math -fexcess-precision=fast
+CFLAGS = -Wall -std=gnu99 -I. -g0 -Os -ffast-math
 DCFLAGS = -Wall -std=gnu99 -I. -g3 -O0
 
 LDFLAGS = -Wl,-s -L.

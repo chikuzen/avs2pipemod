@@ -78,21 +78,19 @@ fail:
 
 static AVS_Value initialize_avisynth(params_t *pr, avs_hnd_t *ah)
 {
-    AVS_Value res = avs_void;
-
-    RETURN_IF_ERROR(load_avisynth_dll(ah), res, "failed to load avisynth.dll\n");
+    RETURN_IF_ERROR(load_avisynth_dll(ah), avs_void, "failed to load avisynth.dll\n");
 
     ah->env = ah->func.avs_create_script_environment(AVS_INTERFACE_25);
     if (ah->func.avs_get_error) {
         const char *error = ah->func.avs_get_error(ah->env);
-        RETURN_IF_ERROR(error, res, "%s\n", error);
+        RETURN_IF_ERROR(error, avs_void, "%s\n", error);
     }
 
     ah->version = get_avisynth_version(ah);
-    RETURN_IF_ERROR(ah->version < 2.5, res, "couldn't find valid version of avisynth.dll\n")
+    RETURN_IF_ERROR(ah->version < 2.5, avs_void, "couldn't find valid version of avisynth.dll\n");
 
     AVS_Value arg = avs_new_value_string(pr->input);
-    res = ah->func.avs_invoke(ah->env, "Import", arg, NULL);
+    AVS_Value res = ah->func.avs_invoke(ah->env, "Import", arg, NULL);
     RETURN_IF_ERROR(avs_is_error(res), res, "%s\n", avs_as_string(res));
 #ifdef BLAME_THE_FLUFF /* see http://mod16.org/hurfdurf/?p=234 */
     AVS_Value mt_test = ah->func.avs_invoke(ah->env, "GetMTMode", avs_new_value_bool(0), NULL);
@@ -213,9 +211,9 @@ static void usage()
 {
     fprintf(stderr,
 #ifdef BLAME_THE_FLUFF
-            "avs2pipemod  rev.%s     with MT support\n"
+            "avs2pipemod  ver %s     with MT support\n"
 #else
-            "avs2pipemod  rev.%s\n"
+            "avs2pipemod  ver %s\n"
 #endif
             "built on %s %s\n"
             "\n"
@@ -311,7 +309,7 @@ int main(int argc, char **argv)
 
     avs_hnd_t avs_h = { 0 };
     AVS_Value res = initialize_avisynth(&params, &avs_h);
-    if (!avs_defined(res))
+    if (!avs_is_clip(res))
         goto close;
 
     switch(params.action) {
@@ -333,10 +331,9 @@ int main(int argc, char **argv)
     default:
         break;
     }
+    avs_h.func.avs_release_value(res);
 
 close:
-    if (avs_defined(res))
-        avs_h.func.avs_release_value(res);
     if(avs_h.library)
         close_avisynth_dll(&avs_h);
 ret:

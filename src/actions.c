@@ -81,13 +81,12 @@ static AVS_Value invoke_convert_csp(params_t *pr, avs_hnd_t *ah, AVS_Value res, 
     AVS_Value arg_arr[3] = {res, avs_new_value_bool(pr->frame_type != 'P'),
                             avs_new_value_string(matrix)};
     const int num_array = avs_is_yuy2(ah->vi) ? 2 : 3;
-    if (avs_is_yuy2(ah->vi)) {
+    if (avs_is_yuy2(ah->vi))
         a2pm_log(A2PM_LOG_INFO, "invoking %s(interlaced=%s) ...\n",
                  filter, pr->frame_type != 'p' ? "true" : "false");
-    } else {
+    else
         a2pm_log(A2PM_LOG_INFO, "invoking %s(matrix=%s,interlaced=%s) ...\n",
                  filter, matrix, pr->frame_type != 'p' ? "true" : "false");
-    }
     AVS_Value tmp = ah->func.avs_invoke(ah->env, filter, avs_new_value_array(arg_arr, num_array), arg_name);
     return update_clip(ah, tmp, res);
 }
@@ -96,11 +95,11 @@ static char *get_string_from_pix(int input_pix_type, string_target_t type)
 {
     static const struct {
         int pix_type;
-        char *string_info;
-        char *string_video_out;
-        char *string_y4m_header;
-        char *string_filter_26;
-        char *string_filter_25;
+        char *info;
+        char *video_out;
+        char *y4m_header;
+        char *filter_26;
+        char *filter_25;
     } pix_string_table[] = {
         {AVS_CS_BGR32, "RGB32", "BGRA",             NULL,       "ConvertToYV24", "ConvertToYV12"},
         {AVS_CS_BGR24, "RGB24", "BGR",              NULL,       "ConvertToYV24", "ConvertToYV12"},
@@ -118,15 +117,15 @@ static char *get_string_from_pix(int input_pix_type, string_target_t type)
         if (input_pix_type == pix_string_table[i].pix_type)
             switch (type) {
             case TYPE_INFO:
-                return pix_string_table[i].string_info;
+                return pix_string_table[i].info;
             case TYPE_VIDEO_OUT:
-                return pix_string_table[i].string_video_out;
+                return pix_string_table[i].video_out;
             case TYPE_Y4M_HEADER:
-                return pix_string_table[i].string_y4m_header;
+                return pix_string_table[i].y4m_header;
             case TYPE_FILTER_26:
-                return pix_string_table[i].string_filter_26;
+                return pix_string_table[i].filter_26;
             case TYPE_FILTER_25:
-                return pix_string_table[i].string_filter_25;
+                return pix_string_table[i].filter_25;
             default:
                 break;
             }
@@ -506,6 +505,7 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
 int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
 {
+    RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
     RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->is_sdbd, -1,
                     "DAR 4:3 is supported only NTSC/PAL SD source\n");
 
