@@ -1,5 +1,7 @@
 *.exe
 *.y4m
+*.bgr
+*.bgra
 *.yuv
 *.raw
 *.wav
@@ -8,9 +10,12 @@
 *.log
 
 *.avs
+*.avsi
 *.avi
+*.flv
 *.mp4
 *.mov
+*.nut
 *.3gp
 *.3g2
 *.mkv
@@ -25,3 +30,6 @@
 *.bz2
 *.xz
 *.lzma
+
+*.diff
+*.patch
