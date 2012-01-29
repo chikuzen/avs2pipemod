@@ -38,7 +38,10 @@ typedef enum {
     TYPE_VIDEO_OUT,
     TYPE_Y4M_HEADER,
     TYPE_FILTER_26,
-    TYPE_FILTER_25
+    TYPE_FILTER_25,
+    TYPE_X264_DEMUXER,
+    TYPE_X264_INPUT_CSP,
+    TYPE_X264_OUTPUT_CSP
 } string_target_t;
 
 static int64_t get_current_time(void)
@@ -100,17 +103,20 @@ static char *get_string_from_pix(int input_pix_type, string_target_t type)
         char *y4m_header;
         char *filter_26;
         char *filter_25;
+        char *x264_demuxer;
+        char *x264_input_csp;
+        char *x264_output_csp;
     } pix_string_table[] = {
-        {AVS_CS_BGR32, "RGB32", "BGRA",             NULL,       "ConvertToYV24", "ConvertToYV12"},
-        {AVS_CS_BGR24, "RGB24", "BGR",              NULL,       "ConvertToYV24", "ConvertToYV12"},
-        {AVS_CS_YUY2,  "YUY2",  "YUYV-422-packed",  NULL,       "ConvertToYV16", "ConvertToYV12"},
-        {AVS_CS_YV12,  "YV12",  "YUV-420-planar",   "420mpeg2", NULL,            NULL           },
-        {AVS_CS_I420,  "YV12",  "YUV-420-planar",   "420mpeg2", NULL,            NULL           },
-        {AVS_CS_YV24,  "YV24",  "YUV-444-planar",   "444",      NULL,            NULL           },
-        {AVS_CS_YV16,  "YV16",  "YUV-422-planar",   "422",      NULL,            NULL           },
-        {AVS_CS_YV411, "YV411", "YUV-411-planar",   "411",      NULL,            NULL           },
-        {AVS_CS_Y8,    "Y8",    "luma only (gray)", "mono",     NULL,            NULL           },
-        {AVS_CS_UNKNOWN, NULL, NULL, NULL, NULL, NULL}
+        {AVS_CS_BGR32  , "RGB32", "BGRA"            , NULL      , "ConvertToYV24", "ConvertToYV12", "raw"                      , "bgra"   , "rgb" },
+        {AVS_CS_BGR24  , "RGB24", "BGR"             , NULL      , "ConvertToYV24", "ConvertToYV12", "raw"                      , "bgr"    , "rgb" },
+        {AVS_CS_YUY2   , "YUY2" , "YUYV-422-packed" , NULL      , "ConvertToYV16", "ConvertToYV12", "lavf --input-fmt rawvideo", "yuyv422", "i422"},
+        {AVS_CS_YV12   , "YV12" , "YUV-420-planar"  , "420mpeg2", NULL           , NULL           , "raw"                      , "i420"   , "i420"},
+        {AVS_CS_I420   , "YV12" , "YUV-420-planar"  , "420mpeg2", NULL           , NULL           , "raw"                      , "i420"   , "i420"},
+        {AVS_CS_YV24   , "YV24" , "YUV-444-planar"  , "444"     , NULL           , NULL           , "raw"                      , "i444"   , "i444"},
+        {AVS_CS_YV16   , "YV16" , "YUV-422-planar"  , "422"     , NULL           , NULL           , "raw"                      , "i422"   , "i422"},
+        {AVS_CS_YV411  , "YV411", "YUV-411-planar"  , "411"     , NULL           , NULL           , "lavf --input-fmt rawvideo", "yuv411p", "i422"},
+        {AVS_CS_Y8     , "Y8"   , "luma only (gray)", "mono"    , NULL           , NULL           , "lavf --input-fmt rawvideo", "gray"   , "i420"},
+        {AVS_CS_UNKNOWN, NULL}
     };
 
     for (int i = 0; pix_string_table[i].pix_type != AVS_CS_UNKNOWN; i++)
@@ -126,6 +132,12 @@ static char *get_string_from_pix(int input_pix_type, string_target_t type)
                 return pix_string_table[i].filter_26;
             case TYPE_FILTER_25:
                 return pix_string_table[i].filter_25;
+            case TYPE_X264_DEMUXER:
+                return pix_string_table[i].x264_demuxer;
+            case TYPE_X264_INPUT_CSP:
+                return pix_string_table[i].x264_input_csp;
+            case TYPE_X264_OUTPUT_CSP:
+                return pix_string_table[i].x264_output_csp;
             default:
                 break;
             }
@@ -140,12 +152,12 @@ static int get_chroma_shared_value(int pix_type, int is_horizontal)
         int horizontal;
         int vertical;
     } value_table[] = {
-        {AVS_CS_YUY2,    1, 0},
-        {AVS_CS_YV12,    1, 1},
-        {AVS_CS_I420,    1, 1},
-        {AVS_CS_YV24,    0, 0},
-        {AVS_CS_YV16,    1, 0},
-        {AVS_CS_YV411,   2, 0},
+        {AVS_CS_YUY2   , 1, 0},
+        {AVS_CS_YV12   , 1, 1},
+        {AVS_CS_I420   , 1, 1},
+        {AVS_CS_YV24   , 0, 0},
+        {AVS_CS_YV16   , 1, 0},
+        {AVS_CS_YV411  , 2, 0},
         {AVS_CS_UNKNOWN, 0, 0}
     };
     for (int i = 0; value_table[i].pix_type != AVS_CS_UNKNOWN; i++)
@@ -233,11 +245,12 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
         goto skip_rawvideo;
 
     if (avs_is_field_based(ah->vi)) {
-        a2pm_log(A2PM_LOG_WARNING, "clip is FieldBased.\n"
-                 "           yuv4mpeg2's spec doesn't support fieldbased clip.\n"
-                 "           choose what you want.\n"
-                 "           1:add AssumeFrameBased()  2:add Weave()  others:exit\n"
-                 "               input a number and press enter : ");
+        a2pm_log(A2PM_LOG_WARNING,
+                 "clip is FieldBased.\n"
+                 "%20syuv4mpeg2's spec doesn't support fieldbased clip.\n"
+                 "%20schoose what you want.\n"
+                 "%20s1:add AssumeFrameBased()  2:add Weave()  others:exit\n"
+                 "%20sinput a number and press enter : ", "", "", "", "");
         int k;
         fscanf(stdin, "%d", &k);
         switch (k) {
@@ -299,7 +312,7 @@ skip_rawvideo:
 
     int64_t elapsed = get_current_time() - start;
 
-    a2pm_log(A2PM_LOG_REPEAT, "finished, wrote %d frames [%d%%].\n",
+    a2pm_log(A2PM_LOG_INFO, "finished, wrote %d frames [%d%%].\n",
              wrote, (100 * wrote) / ah->vi->num_frames);
 
     a2pm_log(A2PM_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
@@ -417,27 +430,31 @@ int act_do_info(params_t *pr, avs_hnd_t *ah)
                 "v:frames         %d\n"
                 "v:duration[sec]  %.3f\n"
                 "v:image_type     %s\n",
-                ah->vi->width, ah->vi->height, ah->vi->fps_numerator, ah->vi->fps_denominator,
-                ah->vi->num_frames, (double)ah->vi->num_frames * ah->vi->fps_denominator / ah->vi->fps_numerator,
+                ah->vi->width,
+                ah->vi->height,
+                ah->vi->fps_numerator, ah->vi->fps_denominator,
+                ah->vi->num_frames,
+                (double)ah->vi->num_frames * ah->vi->fps_denominator / ah->vi->fps_numerator,
                 !avs_is_field_based(ah->vi) ? "framebased" : "fieldbased");
 
         char *field_order;
         switch (ah->vi->image_type) {
-            case 1:
-            case 5:
-                field_order = "assumed bottom field first";
-                break;
-            case 2:
-            case 6:
-                field_order = "assumed top field first";
-                break;
-            default:
-                field_order = "not specified";
+        case 1:
+        case 5:
+            field_order = "assumed bottom field first";
+            break;
+        case 2:
+        case 6:
+            field_order = "assumed top field first";
+            break;
+        default:
+            field_order = "not specified";
         }
         fprintf(stdout,
                 "v:field_order    %s\n"
                 "v:pixel_type     %s\n",
-                field_order, get_string_from_pix(ah->vi->pixel_type, TYPE_INFO));
+                field_order,
+                get_string_from_pix(ah->vi->pixel_type, TYPE_INFO));
     }
 
     if (avs_has_audio(ah->vi) && pr->action == A2PM_ACT_INFO) {
@@ -450,7 +467,8 @@ int act_do_info(params_t *pr, avs_hnd_t *ah)
                 "a:duration[sec]  %.3f\n",
                 ah->vi->audio_samples_per_second,
                 ah->vi->sample_type == AVS_SAMPLE_FLOAT ? "float" : "pcm",
-                avs_bytes_per_channel_sample(ah->vi) * 8, ah->vi->nchannels,
+                avs_bytes_per_channel_sample(ah->vi) * 8,
+                ah->vi->nchannels,
                 ah->vi->num_audio_samples,
                 (double)ah->vi->num_audio_samples / ah->vi->audio_samples_per_second);
     }
@@ -608,5 +626,31 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
             " --transfer %s"
             " --colormatrix %s",
             keyint, flag, pr->sar[0], pr->sar[1], color, color, color);
+    return 0;
+}
+
+int act_do_x264raw(params_t *pr, avs_hnd_t *ah)
+{
+    RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
+    RETURN_IF_ERROR((avs_is_interleaved(ah->vi) || avs_is_yv411(ah->vi)) && pr->yuv_depth > 8, -1,
+                    "RGB32/RGB24/YUY2/YV411/Y8 except 8bit-depth is not supported.\n");
+    RETURN_IF_ERROR(avs_is_y8(ah->vi) && (ah->vi->width & 1 || ah->vi->height & 1), -1,
+                    "in case of Y8, width and height need to be even.\n");
+    RETURN_IF_ERROR(pr->yuv_depth > 8 && (ah->vi->width & avs_is_yv24(ah->vi) ? 3 : 1), -1,
+                    "clip has invalid width %d.\n", ah->vi->width);
+
+    fprintf(stdout,
+            " - --demuxer %s"
+            " --input-csp %s"
+            " --input-depth %d"
+            " --input-res %dx%d"
+            " --fps %d/%d"
+            " --output-csp %s",
+            get_string_from_pix(ah->vi->pixel_type, TYPE_X264_DEMUXER),
+            get_string_from_pix(ah->vi->pixel_type, TYPE_X264_INPUT_CSP),
+            pr->yuv_depth,
+            pr->yuv_depth > 8 ? ah->vi->width >> 1 : ah->vi->width, ah->vi->height,
+            ah->vi->fps_numerator, ah->vi->fps_denominator,
+            get_string_from_pix(ah->vi->pixel_type, TYPE_X264_OUTPUT_CSP));
     return 0;
 }

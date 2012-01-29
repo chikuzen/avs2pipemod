@@ -31,6 +31,7 @@ extern int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_info(params_t *pr, avs_hnd_t *ah);
 extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah);
+extern int act_do_x264raw(params_t *pr, avs_hnd_t *ah);
 
 static float get_avisynth_version(avs_hnd_t *ah)
 {
@@ -121,23 +122,24 @@ static int close_avisynth_dll(avs_hnd_t *ah)
 
 static void parse_opts(int argc, char **argv, params_t *p)
 {
-    char short_opts[] = "a::Bb::e::ip::t::v::w::x::";
+    char short_opts[] = "a::Bb::c::e::ip::t::T:v::w::x::";
     struct option long_opts[] = {
-        {"rawaudio", optional_argument, NULL, 'a'},
-        {"extwav",   optional_argument, NULL, 'e'},
-        {"audio",    optional_argument, NULL, 'e'}, /* for backward compatibility */
-        {"wav",      optional_argument, NULL, 'w'},
+        {"rawaudio" , optional_argument, NULL, 'a'},
+        {"extwav"   , optional_argument, NULL, 'e'},
+        {"audio"    , optional_argument, NULL, 'e'}, /* for backward compatibility */
+        {"wav"      , optional_argument, NULL, 'w'},
      //   {"rf64",     optional_argument, NULL, 'r'},
-        {"y4mp",     optional_argument, NULL, 'p'},
-        {"video",    optional_argument, NULL, 'p'}, /* for backward compatibility */
-        {"y4mt",     optional_argument, NULL, 't'},
-        {"y4mb",     optional_argument, NULL, 'b'},
-        {"rawvideo", optional_argument, NULL, 'v'},
-        {"info",           no_argument, NULL, 'i'},
-        {"x264bdp",  optional_argument, NULL, 'x'},
-        {"x264bdt",  optional_argument, NULL, 'y'},
-        {"benchmark",      no_argument, NULL, 'B'},
-        {"trim",     required_argument, NULL, 'T'},
+        {"y4mp"     , optional_argument, NULL, 'p'},
+        {"video"    , optional_argument, NULL, 'p'}, /* for backward compatibility */
+        {"y4mt"     , optional_argument, NULL, 't'},
+        {"y4mb"     , optional_argument, NULL, 'b'},
+        {"rawvideo" , optional_argument, NULL, 'v'},
+        {"info"     ,       no_argument, NULL, 'i'},
+        {"x264bdp"  , optional_argument, NULL, 'x'},
+        {"x264bdt"  , optional_argument, NULL, 'y'},
+        {"benchmark",       no_argument, NULL, 'B'},
+        {"x264raw"  , optional_argument, NULL, 'c'},
+        {"trim"     , required_argument, NULL, 'T'},
         {0, 0, 0, 0}
     };
 
@@ -149,12 +151,12 @@ static void parse_opts(int argc, char **argv, params_t *p)
         case 'a':
         case 'e':
         case 'w':
-   //     case 'r':
+        //case 'r':
             p->action = A2PM_ACT_AUDIO;
             if(optarg)
                 p->bit = optarg;
             p->format_type = parse == 'e' ? A2PM_FMT_WAVEFORMATEXTENSIBLE :
-                        //     parse == 'r' ? A2PM_FMT_RF64 :
+                             //parse == 'r' ? A2PM_FMT_RF64 :
                              parse == 'a' ? A2PM_FMT_RAWAUDIO :
                                             A2PM_FMT_WAVEFORMATEX;
             break;
@@ -195,6 +197,18 @@ static void parse_opts(int argc, char **argv, params_t *p)
             }
             p->is_sdbd = 1;
             break;
+        case 'c':
+            p->action = A2PM_ACT_X264RAW;
+            p->yuv_depth = 8;
+            if (!optarg)
+                break;
+            sscanf(optarg, "%d", &p->yuv_depth);
+            if (p->yuv_depth < 8 || p->yuv_depth > 16) {
+                a2pm_log(A2PM_LOG_ERROR, "invalid argument \"%s\".\n", optarg);
+                a2pm_log(A2PM_LOG_ERROR, "the argument needs to be an integer of 8 to 16.\n\n");
+                p->action = A2PM_ACT_NOTHING;
+            }
+            break;
         case 'B':
             p->action = A2PM_ACT_BENCHMARK;
             break;
@@ -223,18 +237,19 @@ static void usage()
             "       avs2pipemod -rawvideo -trim=1000,0 input.avs > output.yuv\n"
             "\n"
             "   -wav[=8bit|16bit|24bit|32bit|float  default unset]\n"
-            "        output wav format audio to stdout.\n"
-            "        if optional arg is set, bit depth of input will be converted\n"
+            "        output wav format audio(WAVEFORMATEX) to stdout.\n"
+            "        if optional arg is set, audio sample type of input will be converted\n"
             "        to specified value.\n"
             "\n"
             "   -extwav[=8bit|16bit|24bit|32bit|float  default unset]\n"
-            "        output wav extensible format audio containing channel-mask to stdout.\n"
-            "        if optional arg is set, bit depth of input will be converted\n"
+            "        output wav extensible format audio(WAVEFORMATEXTENSIBLE) containing\n"
+            "        channel-mask to stdout.\n"
+            "        if optional arg is set, audio sample type of input will be converted\n"
             "        to specified value.\n"
             "\n"
             "   -rawaudio[=8bit|16bit|24bit|32bit|float  default unset]\n"
             "        output raw pcm audio(without any header) to stdout.\n"
-            "        if optional arg is set, bit depth of input will be converted\n"
+            "        if optional arg is set, audio sample type of input will be converted\n"
             "        to specified value.\n"
             "\n"
             "   -y4mp[=sar  default 0:0]\n"
@@ -253,8 +268,12 @@ static void usage()
             "        set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
             "   -x264bdt[=4:3  default unset(16:9)]\n"
             "        suggest x264(r1939 or later) arguments for bluray disc encoding\n"
-            "        in case of tff source.\n"
-            "        set optarg if DAR4:3 is required(ntsc/pal sd source).\n"
+            "        in case of tff interlaced source.\n"
+            "        set optional arg if DAR4:3 is required(ntsc/pal sd source).\n"
+            "\n"
+            "   -x264raw[=input-depth(8 to 16) default 8]\n"
+            "        suggest x264 arguments in case of -rawvideo output.\n"
+            "        set optional arg when using interleaved output of dither hack.\n"
             "\n"
             "   -info  - output information about aviscript clip.\n"
             "\n"
@@ -262,17 +281,19 @@ static void usage()
             "\n"
             "   -trim[=first_frame,last_frame  default 0,0]\n"
             "        add Trim(first_frame,last_frame) to input script.\n"
-            "        in info/x264bd, this option is ignored.\n"
+            "        in info/x264bd/x264raw, this option is ignored.\n"
             "\n"
             "note1 : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
             "        will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
             "        and, if your avisynth version is 2.5.x, YUY2 input will be converted\n"
             "        to YV12.\n"
             "\n"
-            "note2 : '-x264bdp/t' supports only for primary stream encoding.\n"
+            "note2 : '-x264bd(p/t)' supports only for primary stream encoding.\n"
             "\n"
-            "note3 : using for WAVEFORMATEX(-wav option) except 8bit/16bit PCM is violation\n"
-            "        of specification in fact.\n"
+            "note3 : in fact, it is a spec violation to use WAVEFORMATEX(-wav option)\n"
+            "        except 8bit/16bit PCM.\n"
+            "        however, there are some applications that accept such invalid files\n"
+            "        instead of supporting WAVEFORMATEXTENSIBLE.\n"
             "\n"
             "note4 : '-extwav' supports only general speaker positions.\n"
             "\n"
@@ -285,7 +306,10 @@ static void usage()
             "  5    FL FR FC BL BR             like Dpl II (without LFE)\n"
             "  6    FL FR FC LF BL BR          Standard Surround\n"
             "  7    FL FR FC LF BL BR BC       With back center\n"
-            "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n",
+            "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n"
+            "\n"
+            "note5 : in '-x264raw' with dither hack, output format needs to be\n"
+            "        interleaved(not stacked).\n",
             A2PM_VERSION, __DATE__, __TIME__);
 }
 
@@ -298,7 +322,7 @@ int main(int argc, char **argv)
         goto ret;
     }
 
-    params_t params = { 0 };
+    params_t params = {0};
     parse_opts(argc, argv, &params);
 
     if (params.action == A2PM_ACT_NOTHING) {
@@ -307,7 +331,7 @@ int main(int argc, char **argv)
     }
     params.input = argv[argc - 1];
 
-    avs_hnd_t avs_h = { 0 };
+    avs_hnd_t avs_h = {0};
     AVS_Value res = initialize_avisynth(&params, &avs_h);
     if (!avs_is_clip(res))
         goto close;
@@ -325,6 +349,9 @@ int main(int argc, char **argv)
     case A2PM_ACT_X264BD:
         retcode = act_do_x264bd(&params, &avs_h);
         break;
+    case A2PM_ACT_X264RAW:
+        retcode = act_do_x264raw(&params, &avs_h);
+        break;
     case A2PM_ACT_BENCHMARK:
         retcode = act_do_benchmark(&params, &avs_h, res);
         break;
@@ -334,7 +361,7 @@ int main(int argc, char **argv)
     avs_h.func.avs_release_value(res);
 
 close:
-    if(avs_h.library)
+    if (avs_h.library)
         close_avisynth_dll(&avs_h);
 ret:
     exit(retcode);
