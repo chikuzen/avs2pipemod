@@ -1,20 +1,20 @@
 /* 
  * Copyright (C) 2010 Chris Beswick <chris.beswick@gmail.com>
+ *               2011-2012 Oka Motofumi <chikuzen.mo at gmail dot com>
+ * This file is part of avs2pipemod.
  *
- * This file is part of avs2pipe.
- *
- * avs2pipe is free software: you can redistribute it and/or modify
+ * avs2pipemod is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * avs2pipe is distributed in the hope that it will be useful,
+ * avs2pipemod is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with avs2pipe.  If not, see <http://www.gnu.org/licenses/>.
+ * along with avs2pipemod.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 

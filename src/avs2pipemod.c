@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with avs2pipe.  If not, see <http://www.gnu.org/licenses/>.
+ * along with avs2pipemod.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -122,13 +122,13 @@ static int close_avisynth_dll(avs_hnd_t *ah)
 
 static void parse_opts(int argc, char **argv, params_t *p)
 {
-    char short_opts[] = "a::Bb::c::e::ip::t::T:v::w::x::";
+    char short_opts[] = "a::Bb::c::C::e::ip::t::T:v::w::x::y::";
     struct option long_opts[] = {
         {"rawaudio" , optional_argument, NULL, 'a'},
         {"extwav"   , optional_argument, NULL, 'e'},
         {"audio"    , optional_argument, NULL, 'e'}, /* for backward compatibility */
         {"wav"      , optional_argument, NULL, 'w'},
-     //   {"rf64",     optional_argument, NULL, 'r'},
+        //{"rf64",     optional_argument, NULL, 'r'},
         {"y4mp"     , optional_argument, NULL, 'p'},
         {"video"    , optional_argument, NULL, 'p'}, /* for backward compatibility */
         {"y4mt"     , optional_argument, NULL, 't'},

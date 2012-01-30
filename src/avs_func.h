@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with avs2pipe.  If not, see <http://www.gnu.org/licenses/>.
+ * along with avs2pipemod.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 #ifndef AVS_FUNC_H
