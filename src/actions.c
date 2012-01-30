@@ -524,7 +524,7 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
-    RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->is_sdbd, -1,
+    RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->format_type == A2PM_FMT_SDBD, -1,
                     "DAR 4:3 is supported only NTSC/PAL SD source\n");
 
     const struct {
@@ -607,7 +607,7 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
     RETURN_IF_ERROR(!keyint, -1, "%dx%d @ %d/%d fps not supported.\n",
                     ah->vi->width, ah->vi->height, ah->vi->fps_numerator, ah->vi->fps_denominator);
 
-    if (pr->is_sdbd) {
+    if (pr->format_type == A2PM_FMT_SDBD) {
         pr->sar[0] = ah->vi->height == 576 ? 12 : 10;
         pr->sar[1] = 11;
     }
@@ -639,18 +639,22 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah)
     RETURN_IF_ERROR(pr->yuv_depth > 8 && (ah->vi->width & avs_is_yv24(ah->vi) ? 3 : 1), -1,
                     "clip has invalid width %d.\n", ah->vi->width);
 
+    char string_for_time[32] = "";
+    if (pr->format_type == A2PM_FMT_WITHOUT_TCFILE)
+        sprintf(string_for_time, "--fps %d/%d", ah->vi->fps_numerator, ah->vi->fps_denominator);
+
     fprintf(stdout,
             " - --demuxer %s"
             " --input-csp %s"
             " --input-depth %d"
             " --input-res %dx%d"
-            " --fps %d/%d"
+            " %s"
             " --output-csp %s",
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_DEMUXER),
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_INPUT_CSP),
             pr->yuv_depth,
             pr->yuv_depth > 8 ? ah->vi->width >> 1 : ah->vi->width, ah->vi->height,
-            ah->vi->fps_numerator, ah->vi->fps_denominator,
+            string_for_time,
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_OUTPUT_CSP));
     return 0;
 }

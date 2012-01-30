@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 
-#define A2PM_VERSION "0.2.0"
+#define A2PM_VERSION "0.2.1"
 
 #define RETURN_IF_ERROR(cond, ret, ...) \
     if (cond) {a2pm_log(A2PM_LOG_ERROR, __VA_ARGS__); return ret;}
@@ -47,6 +47,10 @@ typedef enum {
     A2PM_FMT_WAVEFORMATEX,
     A2PM_FMT_WAVEFORMATEXTENSIBLE,
  //   A2PM_FMT_RF64,
+    A2PM_FMT_HDBD,
+    A2PM_FMT_SDBD,
+    A2PM_FMT_WITHOUT_TCFILE,
+    A2PM_FMT_WITH_TCFILE,
     A2PM_FMT_NOTHING
 } format_type_t;
 
@@ -59,7 +63,6 @@ typedef struct {
     char          frame_type;
     char         *bit;
     int           yuv_depth;
-    int           is_sdbd;
 } params_t;
 
 typedef enum {

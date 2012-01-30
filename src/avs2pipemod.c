@@ -139,6 +139,7 @@ static void parse_opts(int argc, char **argv, params_t *p)
         {"x264bdt"  , optional_argument, NULL, 'y'},
         {"benchmark",       no_argument, NULL, 'B'},
         {"x264raw"  , optional_argument, NULL, 'c'},
+        {"x264rawtc", optional_argument, NULL, 'C'},
         {"trim"     , required_argument, NULL, 'T'},
         {0, 0, 0, 0}
     };
@@ -189,17 +190,20 @@ static void parse_opts(int argc, char **argv, params_t *p)
         case 'y':
             p->action = A2PM_ACT_X264BD;
             p->frame_type = parse == 'x' ? 'p' : 't';
+            p->format_type = A2PM_FMT_HDBD;
             if (!optarg)
                 break;
             if(strncmp(optarg, "4:3", 3)) {
                 a2pm_log(A2PM_LOG_ERROR, "invalid argument \"%s\".\n\n", optarg);
                 p->action = A2PM_ACT_NOTHING;
             }
-            p->is_sdbd = 1;
+            p->format_type = A2PM_FMT_SDBD;
             break;
         case 'c':
+        case 'C':
             p->action = A2PM_ACT_X264RAW;
             p->yuv_depth = 8;
+            p->format_type = parse == 'c' ? A2PM_FMT_WITHOUT_TCFILE : A2PM_FMT_WITH_TCFILE;
             if (!optarg)
                 break;
             sscanf(optarg, "%d", &p->yuv_depth);
@@ -274,6 +278,9 @@ static void usage()
             "   -x264raw[=input-depth(8 to 16) default 8]\n"
             "        suggest x264 arguments in case of -rawvideo output.\n"
             "        set optional arg when using interleaved output of dither hack.\n"
+            "   -x264rawtc[=input-depth(8 to 16) default 8]\n"
+            "        suggest x264 arguments in case of -rawvideo output with --tcfile-in.\n"
+            "        set optional arg when using interleaved output of dither hack.\n"
             "\n"
             "   -info  - output information about aviscript clip.\n"
             "\n"
@@ -308,7 +315,7 @@ static void usage()
             "  7    FL FR FC LF BL BR BC       With back center\n"
             "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n"
             "\n"
-            "note5 : in '-x264raw' with dither hack, output format needs to be\n"
+            "note5 : in '-x264raw(tc)' with dither hack, output format needs to be\n"
             "        interleaved(not stacked).\n",
             A2PM_VERSION, __DATE__, __TIME__);
 }
