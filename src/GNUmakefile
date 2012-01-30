@@ -1,7 +1,7 @@
 SRCS = avs2pipemod.c actions.c wave.c common.c
 
-OBJS = $(SRCS:%.c=%.o)
-DOBJS = $(SRCS:%.c=%.d)
+OBJS = $(SRCS:%.c=%$(SUFFIX).o)
+DOBJS = $(SRCS:%.c=%$(SUFFIX).d)
 
 CC = $(CROSS)gcc
 LD = $(CROSS)gcc
@@ -28,25 +28,25 @@ $(DEBUG): $(DOBJS)
 	$(LD) $(DLDFLAGS) -o $@ $^
 
 clean:
-	$(RM) *.exe *.o *.d .depend .dbgdep
+	$(RM) *.exe *.o *.d .depend* .dbgdep*
 
-%.o: %.c .depend
+%$(SUFFIX).o: %.c .depend$(SUFFIX)
 	$(CC) $(CFLAGS) $(XCFLAGS) -c $< -o $@
 
-%.d: %.c .dbgdep
+%$(SUFFIX).d: %.c .dbgdep$(SUFFIX)
 	$(CC) $(DCFLAGS) -c $< -o $@
 
-ifneq ($(wildcard .depend),)
-include .depend
+ifneq ($(wildcard .depend$(SUFFIX)),)
+include .depend$(SUFFIX)
 endif
-ifneq ($(wildcard  .dbgdep),)
-include .dbgdep
+ifneq ($(wildcard  .dbgdep$(SUFFIX)),)
+include .dbgdep$(SUFFIX)
 endif
 
-.depend:
+.depend$(SUFFIX):
 	@$(RM) .depend
-	@$(foreach SRC, $(SRCS), $(CC) $(SRC) $(CFLAGS) -MT $(SRC:%.c=%.o) -MM >> .depend;)
+	@$(foreach SRC, $(SRCS), $(CC) $(SRC) $(CFLAGS) -MT $(SRC:%.c=%.o) -MM >> .depend$(SUFFIX);)
 
-.dbgdep:
+.dbgdep$(SUFFIX):
 	@$(RM) .dbgdep
-	@$(foreach SRC, $(SRCS), $(CC) $(SRC) $(CFLAGS) -MT $(SRC:%.c=%.d) -MM >> .dbgdep;)
+	@$(foreach SRC, $(SRCS), $(CC) $(SRC) $(CFLAGS) -MT $(SRC:%.c=%.d) -MM >> .dbgdep$(SUFFIX);)
