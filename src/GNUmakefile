@@ -44,9 +44,9 @@ include .dbgdep$(SUFFIX)
 endif
 
 .depend$(SUFFIX):
-	@$(RM) .depend
+	@$(RM) .depend$(SUFFIX)
 	@$(foreach SRC, $(SRCS), $(CC) $(SRC) $(CFLAGS) -MT $(SRC:%.c=%.o) -MM >> .depend$(SUFFIX);)
 
 .dbgdep$(SUFFIX):
-	@$(RM) .dbgdep
+	@$(RM) .dbgdep$(SUFFIX)
 	@$(foreach SRC, $(SRCS), $(CC) $(SRC) $(CFLAGS) -MT $(SRC:%.c=%.d) -MM >> .dbgdep$(SUFFIX);)
