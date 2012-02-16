@@ -288,7 +288,7 @@ static void usage()
             "\n"
             "   -trim[=first_frame,last_frame  default 0,0]\n"
             "        add Trim(first_frame,last_frame) to input script.\n"
-            "        in info/x264bd/x264raw, this option is ignored.\n"
+            "        in info, this option is ignored.\n"
             "\n"
             "note1 : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
             "        will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
