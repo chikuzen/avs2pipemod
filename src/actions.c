@@ -33,6 +33,12 @@
 #define Y4M_FRAME_HEADER "FRAME\n"
 #define Y4M_FRAME_HEADER_SIZE 6
 
+#define PASS_OR_TRIM \
+    if (pr->trim[0] || pr->trim[1]) { \
+        res = invoke_trim(pr, ah, res); \
+        RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Trim.\n"); \
+    }
+
 typedef enum {
     TYPE_INFO,
     TYPE_VIDEO_OUT,
@@ -236,10 +242,7 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
 
-    if (pr->trim[0] || pr->trim[1]) {
-        res = invoke_trim(pr, ah, res);
-        RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Trim.\n");
-    }
+    PASS_OR_TRIM;
 
     if (pr->format_type != A2PM_FMT_YUV4MPEG2)
         goto skip_rawvideo;
@@ -329,10 +332,8 @@ int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_audio(ah->vi), -1, "clip has no audio.\n");
 
-    if (avs_has_video(ah->vi) && (pr->trim[0] || pr->trim[1])) {
-        res = invoke_trim(pr, ah, res);
-        RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Trim.\n");
-    }
+    if (avs_has_video(ah->vi))
+        PASS_OR_TRIM;
 
     if (pr->bit) {
         char tmp[20];
@@ -479,10 +480,7 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
 
-    if (pr->trim[0] || pr->trim[1]) {
-        res = invoke_trim(pr, ah, res);
-        RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Trim.\n");
-    }
+    PASS_OR_TRIM;
 
     act_do_info(pr, ah);
 
@@ -521,7 +519,7 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     return 0;
 }
 
-int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
+int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
     RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->format_type == A2PM_FMT_SDBD, -1,
@@ -612,6 +610,8 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
         pr->sar[1] = 11;
     }
 
+    PASS_OR_TRIM;
+
     fprintf(stdout,
             " --bluray-compat"
             " --vbv-maxrate 40000"
@@ -624,12 +624,13 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah)
             " --sar %d:%d"
             " --colorprim %s"
             " --transfer %s"
-            " --colormatrix %s",
-            keyint, flag, pr->sar[0], pr->sar[1], color, color, color);
+            " --colormatrix %s"
+            " --frames %d",
+            keyint, flag, pr->sar[0], pr->sar[1], color, color, color, ah->vi->num_frames);
     return 0;
 }
 
-int act_do_x264raw(params_t *pr, avs_hnd_t *ah)
+int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
     RETURN_IF_ERROR((avs_is_interleaved(ah->vi) || avs_is_yv411(ah->vi)) && pr->yuv_depth > 8, -1,
@@ -638,6 +639,8 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah)
                     "in case of Y8, width and height need to be even.\n");
     RETURN_IF_ERROR(pr->yuv_depth > 8 && (ah->vi->width & avs_is_yv24(ah->vi) ? 3 : 1), -1,
                     "clip has invalid width %d.\n", ah->vi->width);
+
+    PASS_OR_TRIM;
 
     char string_for_time[32] = "";
     if (pr->format_type == A2PM_FMT_WITHOUT_TCFILE)
@@ -649,12 +652,14 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah)
             " --input-depth %d"
             " --input-res %dx%d"
             " %s"
-            " --output-csp %s",
+            " --output-csp %s"
+            " --frames %d",
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_DEMUXER),
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_INPUT_CSP),
             pr->yuv_depth,
             pr->yuv_depth > 8 ? ah->vi->width >> 1 : ah->vi->width, ah->vi->height,
             string_for_time,
-            get_string_from_pix(ah->vi->pixel_type, TYPE_X264_OUTPUT_CSP));
+            get_string_from_pix(ah->vi->pixel_type, TYPE_X264_OUTPUT_CSP),
+            ah->vi->num_frames);
     return 0;
 }

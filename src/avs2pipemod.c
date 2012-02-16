@@ -30,8 +30,8 @@ extern int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_info(params_t *pr, avs_hnd_t *ah);
 extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah);
-extern int act_do_x264raw(params_t *pr, avs_hnd_t *ah);
+extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+extern int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 
 static float get_avisynth_version(avs_hnd_t *ah)
 {
@@ -354,10 +354,10 @@ int main(int argc, char **argv)
         retcode = act_do_info(&params, &avs_h);
         break;
     case A2PM_ACT_X264BD:
-        retcode = act_do_x264bd(&params, &avs_h);
+        retcode = act_do_x264bd(&params, &avs_h, res);
         break;
     case A2PM_ACT_X264RAW:
-        retcode = act_do_x264raw(&params, &avs_h);
+        retcode = act_do_x264raw(&params, &avs_h, res);
         break;
     case A2PM_ACT_BENCHMARK:
         retcode = act_do_benchmark(&params, &avs_h, res);
