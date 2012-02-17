@@ -32,6 +32,7 @@ extern int act_do_info(params_t *pr, avs_hnd_t *ah);
 extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+extern int act_dump_yuv_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 
 static float get_avisynth_version(avs_hnd_t *ah)
 {
@@ -122,7 +123,7 @@ static int close_avisynth_dll(avs_hnd_t *ah)
 
 static void parse_opts(int argc, char **argv, params_t *p)
 {
-    char short_opts[] = "a::Bb::c::C::e::ip::t::T:v::w::x::y::";
+    char short_opts[] = "a::Bb::c::C::de::ip::t::T:v::w::x::y::";
     struct option long_opts[] = {
         {"rawaudio" , optional_argument, NULL, 'a'},
         {"extwav"   , optional_argument, NULL, 'e'},
@@ -140,6 +141,7 @@ static void parse_opts(int argc, char **argv, params_t *p)
         {"benchmark",       no_argument, NULL, 'B'},
         {"x264raw"  , optional_argument, NULL, 'c'},
         {"x264rawtc", optional_argument, NULL, 'C'},
+        {"dumpyuv"  ,       no_argument, NULL, 'd'},
         {"trim"     , required_argument, NULL, 'T'},
         {0, 0, 0, 0}
     };
@@ -216,6 +218,9 @@ static void parse_opts(int argc, char **argv, params_t *p)
         case 'B':
             p->action = A2PM_ACT_BENCHMARK;
             break;
+        case 'd':
+            p->action = A2PM_ACT_DUMP_YUV_AS_TXT;
+            break;
         case 'T':
             sscanf(optarg, "%d,%d", &p->trim[0], &p->trim[1]);
             break;
@@ -286,6 +291,8 @@ static void usage()
             "\n"
             "   -benchmark - do benchmark aviscript, and output results to stdout.\n"
             "\n"
+            "   -dumpyuv - dump yuv values of pixels as tab separated text to stdout.\n"
+            "\n"
             "   -trim[=first_frame,last_frame  default 0,0]\n"
             "        add Trim(first_frame,last_frame) to input script.\n"
             "        in info, this option is ignored.\n"
@@ -316,7 +323,9 @@ static void usage()
             "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n"
             "\n"
             "note5 : in '-x264raw(tc)' with dither hack, output format needs to be\n"
-            "        interleaved(not stacked).\n",
+            "        interleaved(not stacked).\n"
+            "\n"
+            "note6 : '-dumpyuv' supports only planar formats\n",
             A2PM_VERSION, __DATE__, __TIME__);
 }
 
@@ -361,6 +370,9 @@ int main(int argc, char **argv)
         break;
     case A2PM_ACT_BENCHMARK:
         retcode = act_do_benchmark(&params, &avs_h, res);
+        break;
+    case A2PM_ACT_DUMP_YUV_AS_TXT:
+        retcode = act_dump_yuv_as_txt(&params, &avs_h, res);
         break;
     default:
         break;

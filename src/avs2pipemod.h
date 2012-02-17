@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 
-#define A2PM_VERSION "0.2.2"
+#define A2PM_VERSION "0.3.0"
 
 #define RETURN_IF_ERROR(cond, ret, ...) \
     if (cond) {a2pm_log(A2PM_LOG_ERROR, __VA_ARGS__); return ret;}
@@ -36,6 +36,7 @@ typedef enum {
     A2PM_ACT_X264BD,
     A2PM_ACT_BENCHMARK,
     A2PM_ACT_X264RAW,
+    A2PM_ACT_DUMP_YUV_AS_TXT,
     A2PM_ACT_NOTHING
 } action_t;
 

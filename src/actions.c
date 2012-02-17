@@ -663,3 +663,55 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res)
             ah->vi->num_frames);
     return 0;
 }
+
+int act_dump_yuv_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res)
+{
+    RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
+    RETURN_IF_ERROR(!avs_is_planar(ah->vi), -1, "clip must be planar format.\n");
+
+    PASS_OR_TRIM;
+
+    a2pm_log(A2PM_LOG_INFO, "writing y value of %dx%dx%dframes to stdout as text.\n",
+             ah->vi->width, ah->vi->height, ah->vi->num_frames);
+
+    act_do_info(pr, ah);
+    fprintf(stdout, "\n\n");
+
+    const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
+    const int num_planes = avs_is_y8(ah->vi) ? 1 : 3;
+    int width[num_planes];
+    int height[num_planes];
+    for (int p = 0; p < num_planes; p++) {
+        width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
+        height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
+    }
+
+    int wrote = 0;
+    while (wrote < ah->vi->num_frames) {
+        AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
+        const char *err = ah->func.avs_clip_get_error(ah->clip);
+        RETURN_IF_ERROR(err, -1, "%s occurred while reading frame %d\n", err, wrote);
+
+        fprintf(stdout, "frame %d\n", wrote);
+        for (int p = 0; p < num_planes; ++p) {
+            const BYTE* y_value = avs_get_read_ptr_p(frame, planes[p]);
+            fprintf(stdout, "\nplane %s\n", !p ? "Y" : p == 1 ? "U" : "V");
+            for (int y = 0; y < height[p]; ++y) {
+                for (int x = 0; x < width[p]; ++x)
+                    fprintf(stdout, "%d\t", (int)(*(y_value + x)));
+                fputc('\n', stdout);
+                y_value += avs_get_pitch_p(frame, planes[p]);
+            }
+        }
+        ah->func.avs_release_video_frame(frame);
+        fputc('\n', stdout);
+        wrote++;
+    }
+    fflush(stdout);
+
+    a2pm_log(A2PM_LOG_INFO, "finished, wrote %d frames [%d%%].\n",
+             wrote, (100 * wrote) / ah->vi->num_frames);
+    RETURN_IF_ERROR(wrote != ah->vi->num_frames, -1, "only wrote %d of %d frames.\n",
+                    wrote, ah->vi->num_frames);
+    return 0;
+}
