@@ -324,7 +324,7 @@ static void usage()
             "  8    FL FR FC LF BL BR FLC FRC  With front center left/right\n"
             "\n"
             "note5 : in '-x264raw(tc)' with dither hack, output format needs to be\n"
-            "        interleaved(not stacked).\n"
+            "        interleaved(not stacked).\n",
             A2PM_VERSION, __DATE__, __TIME__);
 }
 
