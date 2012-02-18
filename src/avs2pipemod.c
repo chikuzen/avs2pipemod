@@ -32,7 +32,7 @@ extern int act_do_info(params_t *pr, avs_hnd_t *ah);
 extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 extern int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_dump_yuv_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+extern int act_dump_pix_values_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res);
 
 static float get_avisynth_version(avs_hnd_t *ah)
 {
@@ -141,7 +141,8 @@ static void parse_opts(int argc, char **argv, params_t *p)
         {"benchmark",       no_argument, NULL, 'B'},
         {"x264raw"  , optional_argument, NULL, 'c'},
         {"x264rawtc", optional_argument, NULL, 'C'},
-        {"dumpyuv"  ,       no_argument, NULL, 'd'},
+        {"dumpyuv"  ,       no_argument, NULL, 'd'}, /* for backward compatibility */
+        {"dumptxt"  ,       no_argument, NULL, 'd'},
         {"trim"     , required_argument, NULL, 'T'},
         {0, 0, 0, 0}
     };
@@ -219,7 +220,7 @@ static void parse_opts(int argc, char **argv, params_t *p)
             p->action = A2PM_ACT_BENCHMARK;
             break;
         case 'd':
-            p->action = A2PM_ACT_DUMP_YUV_AS_TXT;
+            p->action = A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT;
             break;
         case 'T':
             sscanf(optarg, "%d,%d", &p->trim[0], &p->trim[1]);
@@ -291,7 +292,7 @@ static void usage()
             "\n"
             "   -benchmark - do benchmark aviscript, and output results to stdout.\n"
             "\n"
-            "   -dumpyuv - dump yuv values of pixels as tab separated text to stdout.\n"
+            "   -dumptxt - dump pixel values as tab separated text to stdout.\n"
             "\n"
             "   -trim[=first_frame,last_frame  default 0,0]\n"
             "        add Trim(first_frame,last_frame) to input script.\n"
@@ -324,8 +325,6 @@ static void usage()
             "\n"
             "note5 : in '-x264raw(tc)' with dither hack, output format needs to be\n"
             "        interleaved(not stacked).\n"
-            "\n"
-            "note6 : '-dumpyuv' supports only planar formats\n",
             A2PM_VERSION, __DATE__, __TIME__);
 }
 
@@ -371,8 +370,8 @@ int main(int argc, char **argv)
     case A2PM_ACT_BENCHMARK:
         retcode = act_do_benchmark(&params, &avs_h, res);
         break;
-    case A2PM_ACT_DUMP_YUV_AS_TXT:
-        retcode = act_dump_yuv_as_txt(&params, &avs_h, res);
+    case A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT:
+        retcode = act_dump_pix_values_as_txt(&params, &avs_h, res);
         break;
     default:
         break;

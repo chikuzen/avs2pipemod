@@ -194,20 +194,64 @@ static int write_packed_frames(avs_hnd_t *ah)
     return wrote;
 }
 
+static int write_packed_pix_to_txt(avs_hnd_t *ah)
+{
+    int width = ah->vi->width * avs_bits_per_pixel(ah->vi) >> 3;
+    int count = width * ah->vi->height;
+
+    fprintf(stdout, "pixel order: %s\n\n", avs_is_rgb32(ah->vi) ? "BGRA" :
+                                           avs_is_rgb24(ah->vi) ? "BGR" :
+                                                                  "YUYV");
+    int wrote = 0;
+    while (wrote < ah->vi->num_frames) {
+        AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
+        const char *err = ah->func.avs_clip_get_error(ah->clip);
+        RETURN_IF_ERROR(err, wrote, "%s occurred while reading frame %d\n", err, wrote);
+        fprintf(stdout, "frame %d\n", wrote);
+        int step = 0;
+        const BYTE *pix_value = avs_get_read_ptr(frame);
+        for (int y = 0; y < ah->vi->height; y++) {
+            for (int x = 0; x < width; x++, step++)
+                fprintf(stdout, "%d\t", *(pix_value + x));
+            fputc('\n', stdout);
+            pix_value += avs_get_pitch(frame);
+        }
+        fputc('\n', stdout);
+        ah->func.avs_release_video_frame(frame);
+        if (step != count)
+            break;
+        wrote++;
+    }
+    return wrote;
+}
+
+#define NUM_PLANES 3
+typedef struct {
+    int planes[NUM_PLANES];
+    int num_planes;
+    int width[NUM_PLANES];
+    int height[NUM_PLANES];
+    int buff_inc[NUM_PLANES];
+} planar_property;
+#undef NUM_PLANES
+
+static planar_property *get_planar_property(avs_hnd_t *ah)
+{
+    planar_property *property = malloc(sizeof(*property));
+    property->planes[0] = AVS_PLANAR_Y;
+    property->planes[1] = AVS_PLANAR_U;
+    property->planes[2] = AVS_PLANAR_V;
+    property->num_planes = avs_is_y8(ah->vi) ? 1 : 3;
+    for (int p = 0; p < property->num_planes; p++) {
+        property->width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
+        property->height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
+        property->buff_inc[p] = property->width[p] * property->height[p];
+    }
+    return property;
+}
+
 static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
 {
-    const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
-    const int num_planes = avs_is_y8(ah->vi) ? 1 : 3;
-
-    int width[num_planes];
-    int height[num_planes];
-    int buff_inc[num_planes];
-    for (int p = 0; p < num_planes; p++) {
-        width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
-        height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
-        buff_inc[p] = width[p] * height[p];
-    }
-
     size_t count = ((ah->vi->width * ah->vi->height * avs_bits_per_pixel(ah->vi)) >> 3)
                    + (pr->format_type == A2PM_FMT_YUV4MPEG2 ? Y4M_FRAME_HEADER_SIZE : 0);
 
@@ -220,21 +264,61 @@ static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
         buff_0 += Y4M_FRAME_HEADER_SIZE;
     }
 
-    int wrote;
-    for (wrote = 0; wrote < ah->vi->num_frames; wrote++) {
+    planar_property *pp = get_planar_property(ah);
+
+    int wrote = 0;
+    while (wrote < ah->vi->num_frames) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
         BYTE *buff_ptr = buff_0;
-        for (int p = 0; p < num_planes; p++) {
-            ah->func.avs_bit_blt(ah->env, buff_ptr, width[p], avs_get_read_ptr_p(frame, planes[p]),
-                                 avs_get_pitch_p(frame, planes[p]), width[p], height[p]);
-            buff_ptr += buff_inc[p];
+        for (int p = 0; p < pp->num_planes; p++) {
+            ah->func.avs_bit_blt(ah->env, buff_ptr, pp->width[p], avs_get_read_ptr_p(frame, pp->planes[p]),
+                                 avs_get_pitch_p(frame, pp->planes[p]), pp->width[p], pp->height[p]);
+            buff_ptr += pp->buff_inc[p];
         }
         size_t step = fwrite(buff, sizeof(BYTE), count, stdout);
         ah->func.avs_release_video_frame(frame);
         if (step != count)
             break;
+        wrote++;
     }
+    free(pp);
     free(buff);
+    return wrote;
+}
+
+static int write_planar_pix_to_txt(avs_hnd_t *ah)
+{
+    int count = (ah->vi->width * ah->vi->height * avs_bits_per_pixel(ah->vi)) >> 3;
+    planar_property *pp = get_planar_property(ah);
+
+    int wrote = 0;
+    while (wrote < ah->vi->num_frames) {
+        AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
+        const char *err = ah->func.avs_clip_get_error(ah->clip);
+        if (err) {
+            a2pm_log(A2PM_LOG_ERROR, "%s occurred while reading frame %d\n", err, wrote);
+            goto planar_txt_exit;
+        }
+        fprintf(stdout, "frame %d\n", wrote);
+        int step = 0;
+        for (int p = 0; p < pp->num_planes; p++) {
+            const BYTE* pix_value = avs_get_read_ptr_p(frame, pp->planes[p]);
+            fprintf(stdout, "\nplane %s\n", !p ? "Y" : p == 1 ? "U" : "V");
+            for (int y = 0; y < pp->height[p]; y++) {
+                for (int x = 0; x < pp->width[p]; x++, step++)
+                    fprintf(stdout, "%d\t", *(pix_value + x));
+                fputc('\n', stdout);
+                pix_value += avs_get_pitch_p(frame, pp->planes[p]);
+            }
+        }
+        ah->func.avs_release_video_frame(frame);
+        fputc('\n', stdout);
+        if (step != count)
+            break;
+        wrote++;
+    }
+planar_txt_exit:
+    free(pp);
     return wrote;
 }
 
@@ -632,69 +716,40 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     char string_for_time[32] = "";
     if (pr->format_type == A2PM_FMT_WITHOUT_TCFILE)
-        sprintf(string_for_time, "--fps %d/%d", ah->vi->fps_numerator, ah->vi->fps_denominator);
+        sprintf(string_for_time, " --fps %d/%d", ah->vi->fps_numerator, ah->vi->fps_denominator);
 
     fprintf(stdout,
             " - --demuxer %s"
             " --input-csp %s"
             " --input-depth %d"
             " --input-res %dx%d"
-            " %s"
             " --output-csp %s"
-            " --frames %d",
+            " --frames %d"
+            "%s",
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_DEMUXER),
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_INPUT_CSP),
             pr->yuv_depth,
             pr->yuv_depth > 8 ? ah->vi->width >> 1 : ah->vi->width, ah->vi->height,
-            string_for_time,
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_OUTPUT_CSP),
-            ah->vi->num_frames);
+            ah->vi->num_frames,
+            string_for_time);
     return 0;
 }
 
-int act_dump_yuv_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res)
+int act_dump_pix_values_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
-    RETURN_IF_ERROR(!avs_is_planar(ah->vi), -1, "clip must be planar format.\n");
 
     PASS_OR_TRIM;
 
-    a2pm_log(A2PM_LOG_INFO, "writing y value of %dx%dx%dframes to stdout as text.\n",
+    a2pm_log(A2PM_LOG_INFO, "writing pixel values of %dx%dx%dframes to stdout as text.\n",
              ah->vi->width, ah->vi->height, ah->vi->num_frames);
 
     act_do_info(pr, ah);
     fprintf(stdout, "\n\n");
 
-    const int planes[] = {AVS_PLANAR_Y, AVS_PLANAR_U, AVS_PLANAR_V};
-    const int num_planes = avs_is_y8(ah->vi) ? 1 : 3;
-    int width[num_planes];
-    int height[num_planes];
-    for (int p = 0; p < num_planes; p++) {
-        width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
-        height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
-    }
-
-    int wrote = 0;
-    while (wrote < ah->vi->num_frames) {
-        AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
-        const char *err = ah->func.avs_clip_get_error(ah->clip);
-        RETURN_IF_ERROR(err, -1, "%s occurred while reading frame %d\n", err, wrote);
-
-        fprintf(stdout, "frame %d\n", wrote);
-        for (int p = 0; p < num_planes; ++p) {
-            const BYTE* y_value = avs_get_read_ptr_p(frame, planes[p]);
-            fprintf(stdout, "\nplane %s\n", !p ? "Y" : p == 1 ? "U" : "V");
-            for (int y = 0; y < height[p]; ++y) {
-                for (int x = 0; x < width[p]; ++x)
-                    fprintf(stdout, "%d\t", *(y_value + x));
-                fputc('\n', stdout);
-                y_value += avs_get_pitch_p(frame, planes[p]);
-            }
-        }
-        ah->func.avs_release_video_frame(frame);
-        fputc('\n', stdout);
-        wrote++;
-    }
+    int wrote = avs_is_planar(ah->vi) ? write_planar_pix_to_txt(ah) :
+                                        write_packed_pix_to_txt(ah);
     fflush(stdout);
 
     a2pm_log(A2PM_LOG_INFO, "finished, wrote %d frames [%d%%].\n",
