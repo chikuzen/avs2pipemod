@@ -276,6 +276,10 @@ AVSC_INLINE int avs_is_bff(const AVS_VideoInfo * p)
 AVSC_INLINE int avs_is_tff(const AVS_VideoInfo * p) 
         { return !!(p->image_type & AVS_IT_TFF); }
 
+AVSC_INLINE int avs_get_field_order(const AVS_VideoInfo * p)
+        { return (p->image_type & AVS_IT_BFF) ? AVS_IT_BFF :
+                 (p->image_type & AVS_IT_TFF) ? AVS_IT_TFF : 0;}
+
 AVSC_INLINE int avs_bits_per_pixel(const AVS_VideoInfo * p) 
 { 
   switch (p->pixel_type) {

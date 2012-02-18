@@ -424,37 +424,25 @@ int act_do_info(params_t *pr, avs_hnd_t *ah)
                     "script_name      %s\n",
                     ah->version, pr->input);
     if (avs_has_video(ah->vi)) {
+        int fieldorder = avs_get_field_order(ah->vi);
         fprintf(stdout,
                 "v:width          %d\n"
                 "v:height         %d\n"
                 "v:fps            %d/%d\n"
                 "v:frames         %d\n"
                 "v:duration[sec]  %.3f\n"
-                "v:image_type     %s\n",
+                "v:image_type     %s\n"
+                "v:field_order    %s\n"
+                "v:pixel_type     %s\n",
                 ah->vi->width,
                 ah->vi->height,
                 ah->vi->fps_numerator, ah->vi->fps_denominator,
                 ah->vi->num_frames,
                 (double)ah->vi->num_frames * ah->vi->fps_denominator / ah->vi->fps_numerator,
-                !avs_is_field_based(ah->vi) ? "framebased" : "fieldbased");
-
-        char *field_order;
-        switch (ah->vi->image_type) {
-        case 1:
-        case 5:
-            field_order = "assumed bottom field first";
-            break;
-        case 2:
-        case 6:
-            field_order = "assumed top field first";
-            break;
-        default:
-            field_order = "not specified";
-        }
-        fprintf(stdout,
-                "v:field_order    %s\n"
-                "v:pixel_type     %s\n",
-                field_order,
+                !avs_is_field_based(ah->vi) ? "framebased" : "fieldbased",
+                fieldorder == AVS_IT_BFF ? "assumed bottom field first" :
+                    fieldorder == AVS_IT_TFF ? "assumed top field first" :
+                                               "not specified",
                 get_string_from_pix(ah->vi->pixel_type, TYPE_INFO));
     }
 
@@ -698,7 +686,7 @@ int act_dump_yuv_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res)
             fprintf(stdout, "\nplane %s\n", !p ? "Y" : p == 1 ? "U" : "V");
             for (int y = 0; y < height[p]; ++y) {
                 for (int x = 0; x < width[p]; ++x)
-                    fprintf(stdout, "%d\t", (int)(*(y_value + x)));
+                    fprintf(stdout, "%d\t", *(y_value + x));
                 fputc('\n', stdout);
                 y_value += avs_get_pitch_p(frame, planes[p]);
             }
