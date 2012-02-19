@@ -89,14 +89,14 @@ static AVS_Value invoke_convert_csp(params_t *pr, avs_hnd_t *ah, AVS_Value res, 
     const char *arg_name[3] = {NULL, "interlaced", "matrix"};
     AVS_Value arg_arr[3] = {res, avs_new_value_bool(pr->frame_type != 'P'),
                             avs_new_value_string(matrix)};
-    const int num_array = avs_is_yuy2(ah->vi) ? 2 : 3;
     if (avs_is_yuy2(ah->vi))
         a2pm_log(A2PM_LOG_INFO, "invoking %s(interlaced=%s) ...\n",
                  filter, pr->frame_type != 'p' ? "true" : "false");
     else
         a2pm_log(A2PM_LOG_INFO, "invoking %s(matrix=%s,interlaced=%s) ...\n",
                  filter, matrix, pr->frame_type != 'p' ? "true" : "false");
-    AVS_Value tmp = ah->func.avs_invoke(ah->env, filter, avs_new_value_array(arg_arr, num_array), arg_name);
+    AVS_Value tmp = ah->func.avs_invoke(ah->env, filter,
+                                        avs_new_value_array(arg_arr, avs_is_yuy2(ah->vi) ? 2 : 3), arg_name);
     return update_clip(ah, tmp, res);
 }
 
@@ -151,6 +151,42 @@ static char *get_string_from_pix(int input_pix_type, string_target_t type)
     return "UNKNOWN";
 }
 
+static int write_riff_ext_header(wave_args_t *args)
+{
+    WaveRiffExtHeader *header = wave_create_riff_ext_header(args);
+    RETURN_IF_ERROR(!header, -1, "failed to execute %s.\n", __func__);
+    fwrite(header, sizeof(*header), 1, stdout);
+    free(header);
+    return 0;
+}
+
+static int write_riff_header(wave_args_t *args)
+{
+    WaveRiffHeader *header = wave_create_riff_header(args);
+    RETURN_IF_ERROR(!header, -1, "failed to execute %s.\n", __func__);
+    fwrite(header, sizeof(*header), 1, stdout);
+    free(header);
+    return 0;
+}
+
+static int write_audio_file_header(params_t *pr, avs_hnd_t *ah)
+{
+    WaveFormatType format = ah->vi->sample_type == AVS_SAMPLE_FLOAT ?
+                            WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
+    wave_args_t args = {format, ah->vi->nchannels, ah->vi->audio_samples_per_second,
+                        avs_bytes_per_channel_sample(ah->vi), ah->vi->num_audio_samples};
+
+    switch (pr->format_type) {
+    case A2PM_FMT_WAVEFORMATEXTENSIBLE:
+        return write_riff_ext_header(&args);
+    case A2PM_FMT_WAVEFORMATEX:
+        return write_riff_header(&args);
+    default:
+        break;
+    }
+    return -1;
+}
+
 static int get_chroma_shared_value(int pix_type, int is_horizontal)
 {
     static const struct {
@@ -178,7 +214,7 @@ static int write_packed_frames(avs_hnd_t *ah)
     size_t count = width * ah->vi->height;
 
     BYTE *buff = (BYTE*)malloc(count);
-    RETURN_IF_ERROR(!buff, 0, "malloc failed.\n");
+    RETURN_IF_ERROR(!buff, 0, "malloc failed at %s.\n", __func__);
 
     int wrote;
     for (wrote = 0; wrote < ah->vi->num_frames; wrote++) {
@@ -194,7 +230,7 @@ static int write_packed_frames(avs_hnd_t *ah)
     return wrote;
 }
 
-static int write_packed_pix_to_txt(avs_hnd_t *ah)
+static int write_packed_pix_values(avs_hnd_t *ah)
 {
     int width = ah->vi->width * avs_bits_per_pixel(ah->vi) >> 3;
     int count = width * ah->vi->height;
@@ -232,31 +268,33 @@ typedef struct {
     int width[NUM_PLANES];
     int height[NUM_PLANES];
     int buff_inc[NUM_PLANES];
-} planar_property;
+} planar_properties;
 #undef NUM_PLANES
 
-static planar_property *get_planar_property(avs_hnd_t *ah)
+static planar_properties *get_planar_properties(avs_hnd_t *ah)
 {
-    planar_property *property = malloc(sizeof(*property));
-    property->planes[0] = AVS_PLANAR_Y;
-    property->planes[1] = AVS_PLANAR_U;
-    property->planes[2] = AVS_PLANAR_V;
-    property->num_planes = avs_is_y8(ah->vi) ? 1 : 3;
-    for (int p = 0; p < property->num_planes; p++) {
-        property->width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
-        property->height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
-        property->buff_inc[p] = property->width[p] * property->height[p];
+    planar_properties *properties = malloc(sizeof(*properties));
+    RETURN_IF_ERROR(!properties, NULL, "malloc failed at %s.\n", __func__);
+    properties->planes[0] = AVS_PLANAR_Y;
+    properties->planes[1] = AVS_PLANAR_U;
+    properties->planes[2] = AVS_PLANAR_V;
+    properties->num_planes = avs_is_y8(ah->vi) ? 1 : 3;
+    for (int p = 0; p < properties->num_planes; p++) {
+        properties->width[p] = ah->vi->width >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 1) : 0);
+        properties->height[p] = ah->vi->height >> (p ? get_chroma_shared_value(ah->vi->pixel_type, 0) : 0);
+        properties->buff_inc[p] = properties->width[p] * properties->height[p];
     }
-    return property;
+    return properties;
 }
 
 static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
 {
+
     size_t count = ((ah->vi->width * ah->vi->height * avs_bits_per_pixel(ah->vi)) >> 3)
                    + (pr->format_type == A2PM_FMT_YUV4MPEG2 ? Y4M_FRAME_HEADER_SIZE : 0);
 
     BYTE *buff = (BYTE*)malloc(count);
-    RETURN_IF_ERROR(!buff, 0, "malloc failed.\n");
+    RETURN_IF_ERROR(!buff, 0, "malloc failed at %s.\n", __func__);
 
     BYTE *buff_0 = buff;
     if (pr->format_type == A2PM_FMT_YUV4MPEG2) {
@@ -264,7 +302,11 @@ static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
         buff_0 += Y4M_FRAME_HEADER_SIZE;
     }
 
-    planar_property *pp = get_planar_property(ah);
+    planar_properties *pp = get_planar_properties(ah);
+    if (!pp) {
+        free(buff);
+        return 0;
+    }
 
     int wrote = 0;
     while (wrote < ah->vi->num_frames) {
@@ -281,15 +323,18 @@ static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
             break;
         wrote++;
     }
+
     free(pp);
     free(buff);
     return wrote;
 }
 
-static int write_planar_pix_to_txt(avs_hnd_t *ah)
+static int write_planar_pix_values(avs_hnd_t *ah)
 {
     int count = (ah->vi->width * ah->vi->height * avs_bits_per_pixel(ah->vi)) >> 3;
-    planar_property *pp = get_planar_property(ah);
+    planar_properties *pp = get_planar_properties(ah);
+    if (!pp)
+        return 0;
 
     int wrote = 0;
     while (wrote < ah->vi->num_frames) {
@@ -297,8 +342,9 @@ static int write_planar_pix_to_txt(avs_hnd_t *ah)
         const char *err = ah->func.avs_clip_get_error(ah->clip);
         if (err) {
             a2pm_log(A2PM_LOG_ERROR, "%s occurred while reading frame %d\n", err, wrote);
-            goto planar_txt_exit;
+            break;
         }
+
         fprintf(stdout, "frame %d\n", wrote);
         int step = 0;
         for (int p = 0; p < pp->num_planes; p++) {
@@ -311,33 +357,28 @@ static int write_planar_pix_to_txt(avs_hnd_t *ah)
                 pix_value += avs_get_pitch_p(frame, pp->planes[p]);
             }
         }
+
         ah->func.avs_release_video_frame(frame);
         fputc('\n', stdout);
         if (step != count)
             break;
         wrote++;
     }
-planar_txt_exit:
+
     free(pp);
     return wrote;
 }
 
-int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
+static int preprocess_for_y4mout(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
-    RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
-
-    PASS_OR_TRIM;
-
-    if (pr->format_type != A2PM_FMT_YUV4MPEG2)
-        goto skip_rawvideo;
-
     if (avs_is_field_based(ah->vi)) {
         a2pm_log(A2PM_LOG_WARNING,
                  "clip is FieldBased.\n"
-                 "%20syuv4mpeg2's spec doesn't support fieldbased clip.\n"
-                 "%20schoose what you want.\n"
-                 "%20s1:add AssumeFrameBased()  2:add Weave()  others:exit\n"
-                 "%20sinput a number and press enter : ", "", "", "", "");
+                 "%19s yuv4mpeg2's spec doesn't support fieldbased clip.\n"
+                 "%19s choose what you want.\n"
+                 "%19s 1:add AssumeFrameBased()  2:add Weave()  others:exit\n"
+                 "%19s input a number and press enter : ",
+                 "", "", "", "");
         int k;
         fscanf(stdin, "%d", &k);
         switch (k) {
@@ -356,13 +397,26 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     if (!avs_is_planar(ah->vi)) {
         const char *convert = get_string_from_pix(ah->vi->pixel_type,
-                                                  ah->version < 2.59 ? TYPE_FILTER_25 : TYPE_FILTER_26);
+                                                  ah->version < 2.59 ?
+                                                      TYPE_FILTER_25 :
+                                                      TYPE_FILTER_26);
         res = invoke_convert_csp(pr, ah, res, convert);
         RETURN_IF_ERROR(avs_is_error(res), -1,
                         "failed to invoke %s. please check resolution.\n", convert);
     }
 
-skip_rawvideo:
+    return 0;
+}
+
+int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
+{
+    RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
+
+    PASS_OR_TRIM;
+
+    if (pr->format_type == A2PM_FMT_YUV4MPEG2 && preprocess_for_y4mout(pr, ah, res))
+        return -1;
+
     if (pr->format_type == A2PM_FMT_RAWVIDEO_VFLIP) {
         res = invoke_filter(ah, res, "FlipVertical");
         RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke FlipVertical()\n")
@@ -371,17 +425,29 @@ skip_rawvideo:
     RETURN_IF_ERROR(_setmode(_fileno(stdout), _O_BINARY) == -1, -1,
                     "cannot switch stdout to binary mode.\n");
 
-    if (pr->format_type == A2PM_FMT_YUV4MPEG2)
-        a2pm_log(A2PM_LOG_INFO, "writing %d frames of %d/%d fps, %dx%d,\n"
-                                "%20ssar %d:%d, %s %s video.\n",
-                 ah->vi->num_frames, ah->vi->fps_numerator, ah->vi->fps_denominator,
-                 ah->vi->width, ah->vi->height, "", pr->sar[0], pr->sar[1],
-                 get_string_from_pix(ah->vi->pixel_type, TYPE_VIDEO_OUT),
-                 pr->frame_type == 'p' ? "progressive" : pr->frame_type == 't' ? "tff" : "bff");
-    else
-        a2pm_log(A2PM_LOG_INFO, "writing %d frames of %dx%d %s rawvideo.\n",
-                 ah->vi->num_frames, ah->vi->width, ah->vi->height,
-                 get_string_from_pix(ah->vi->pixel_type, TYPE_VIDEO_OUT));
+#define MESSAGE_LEN_MAX 128
+    char *start_message = (char *)malloc(MESSAGE_LEN_MAX);
+    RETURN_IF_ERROR(!start_message, -1, "malloc failed at %s.\n", __func__);
+    switch (pr->format_type) {
+    case A2PM_FMT_YUV4MPEG2:
+        snprintf(start_message, MESSAGE_LEN_MAX,
+                "writing %d frames of %d/%d fps, %dx%d,\n"
+                "%19s sar %d:%d, %s %s video.\n",
+                ah->vi->num_frames, ah->vi->fps_numerator, ah->vi->fps_denominator,
+                ah->vi->width, ah->vi->height, "", pr->sar[0], pr->sar[1],
+                get_string_from_pix(ah->vi->pixel_type, TYPE_VIDEO_OUT),
+                pr->frame_type == 'p' ? "progressive" : pr->frame_type == 't' ? "tff" : "bff");
+        break;
+    default:
+        snprintf(start_message, MESSAGE_LEN_MAX,
+                "writing %d frames of %dx%d %s rawvideo.\n",
+                ah->vi->num_frames, ah->vi->width, ah->vi->height,
+                get_string_from_pix(ah->vi->pixel_type, TYPE_VIDEO_OUT));
+        break;
+    }
+    a2pm_log(A2PM_LOG_INFO, "%s", start_message);
+    free(start_message);
+#undef MESSAGE_LEN_MAX
 
     int64_t start = get_current_time();
 
@@ -410,8 +476,6 @@ skip_rawvideo:
     return 0;
 }
 
-static inline void nope() {}
-
 int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_audio(ah->vi), -1, "clip has no audio.\n");
@@ -428,55 +492,26 @@ int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res)
         }
     }
 
-    RETURN_IF_ERROR(_setmode(_fileno(stdout), _O_BINARY) == -1, -1,
-                    "cannot switch stdout to binary mode.\n");
-
     size_t step = 0;
     size_t count = ah->vi->audio_samples_per_second;
     size_t size = avs_bytes_per_channel_sample(ah->vi) * ah->vi->nchannels;
     uint64_t target = ah->vi->num_audio_samples;
 
-    void *buff = malloc(size * count);
-
     a2pm_log(A2PM_LOG_INFO, "writing %.3f seconds of %d Hz, %d channel audio.\n",
             (double)ah->vi->num_audio_samples / ah->vi->audio_samples_per_second,
             ah->vi->audio_samples_per_second, ah->vi->nchannels);
 
+    RETURN_IF_ERROR(_setmode(_fileno(stdout), _O_BINARY) == -1, -1,
+                    "cannot switch stdout to binary mode.\n");
+
     int64_t start = get_current_time();
 
-    if (pr->format_type == A2PM_FMT_RAWAUDIO)
-        goto skip_rawaudio;
+    RETURN_IF_ERROR(pr->format_type != A2PM_FMT_RAWAUDIO && write_audio_file_header(pr, ah),
+                    -1, "failed to write file header.\n");
 
-    WaveFormatType format = ah->vi->sample_type == AVS_SAMPLE_FLOAT ?
-                            WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
-    wave_args_t args = {format, ah->vi->nchannels, ah->vi->audio_samples_per_second,
-                        avs_bytes_per_channel_sample(ah->vi), ah->vi->num_audio_samples};
+    void *buff = malloc(size * count);
+    RETURN_IF_ERROR(!buff, -1, "malloc failed at %s.\n", __func__);
 
-    switch (pr->format_type) {
-#if 0
-    case A2PM_FMT_RF64:
-        WaveRf64Header *header = wave_create_rf64_header(&args);
-        fwrite(header, sizeof(*header), 1, stdout);
-        free(header);
-        break;
-#endif
-    case A2PM_FMT_WAVEFORMATEXTENSIBLE:
-        nope();
-        WaveRiffExtHeader *header_ext = wave_create_riff_ext_header(&args);
-        fwrite(header_ext, sizeof(*header_ext), 1, stdout);
-        free(header_ext);
-        break;
-    case A2PM_FMT_WAVEFORMATEX:
-        nope();
-        WaveRiffHeader *header_wav = wave_create_riff_header(&args);
-        fwrite(header_wav, sizeof(*header_wav), 1, stdout);
-        free(header_wav);
-        break;
-    default:
-        break;
-    }
-
-skip_rawaudio:
     ah->func.avs_get_audio(ah->clip, buff, 0, target % count);
     uint64_t wrote = fwrite(buff, size, target % count, stdout);
     while (wrote < target) {
@@ -504,9 +539,11 @@ skip_rawaudio:
 
 int act_do_info(params_t *pr, avs_hnd_t *ah)
 {
-    fprintf(stdout, "avisynth_version %.2f\n"
-                    "script_name      %s\n",
-                    ah->version, pr->input);
+    fprintf(stdout,
+            "avisynth_version %.2f\n"
+            "script_name      %s\n",
+            ah->version, pr->input);
+
     if (avs_has_video(ah->vi)) {
         int fieldorder = avs_get_field_order(ah->vi);
         fprintf(stdout,
@@ -748,8 +785,8 @@ int act_dump_pix_values_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     act_do_info(pr, ah);
     fprintf(stdout, "\n\n");
 
-    int wrote = avs_is_planar(ah->vi) ? write_planar_pix_to_txt(ah) :
-                                        write_packed_pix_to_txt(ah);
+    int wrote = avs_is_planar(ah->vi) ? write_planar_pix_values(ah) :
+                                        write_packed_pix_values(ah);
     fflush(stdout);
 
     a2pm_log(A2PM_LOG_INFO, "finished, wrote %d frames [%d%%].\n",

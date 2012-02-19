@@ -66,6 +66,7 @@ static uint32_t get_channel_mask(uint16_t channels)
 WaveRiffHeader *wave_create_riff_header(wave_args_t *a)
 {
     WaveRiffHeader *header = malloc(sizeof(*header));
+    RETURN_IF_ERROR(!header, NULL, "malloc failed at %s.\n", __func__);
 
     uint32_t fact_samples = (uint32_t)a->samples;
     if(a->samples > UINT32_MAX) {
@@ -104,6 +105,8 @@ WaveRiffHeader *wave_create_riff_header(wave_args_t *a)
 WaveRiffExtHeader *wave_create_riff_ext_header(wave_args_t *a)
 {
     WaveRiffExtHeader *header = malloc(sizeof(*header));
+    RETURN_IF_ERROR(!header, NULL, "malloc failed at %s.\n", __func__);
+
     WaveGuid sub_format = {WAVE_FORMAT_PCM, 0x0000, 0x0010,
                             {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
