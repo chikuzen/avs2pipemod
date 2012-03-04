@@ -382,5 +382,5 @@ close:
     if (avs_h.library)
         close_avisynth_dll(&avs_h);
 ret:
-    exit(retcode);
+    return retcode;
 }

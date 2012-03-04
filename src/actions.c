@@ -289,7 +289,6 @@ static planar_properties *get_planar_properties(avs_hnd_t *ah)
 
 static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
 {
-
     size_t count = ((ah->vi->width * ah->vi->height * avs_bits_per_pixel(ah->vi)) >> 3)
                    + (pr->format_type == A2PM_FMT_YUV4MPEG2 ? Y4M_FRAME_HEADER_SIZE : 0);
 
@@ -397,9 +396,8 @@ static int preprocess_for_y4mout(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     if (!avs_is_planar(ah->vi)) {
         const char *convert = get_string_from_pix(ah->vi->pixel_type,
-                                                  ah->version < 2.59 ?
-                                                      TYPE_FILTER_25 :
-                                                      TYPE_FILTER_26);
+                                                  (ah->version + 0.005) * 100 < 260 ?
+                                                  TYPE_FILTER_25 : TYPE_FILTER_26);
         res = invoke_convert_csp(pr, ah, res, convert);
         RETURN_IF_ERROR(avs_is_error(res), -1,
                         "failed to invoke %s. please check resolution.\n", convert);
@@ -709,6 +707,7 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
             color      = bd_spec_table[i].color;
             pr->sar[0] = bd_spec_table[i].sar_x;
             pr->sar[1] = bd_spec_table[i].sar_y;
+            break;
         }
     }
     RETURN_IF_ERROR(!keyint, -1, "%dx%d @ %d/%d fps not supported.\n",
