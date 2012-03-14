@@ -745,7 +745,7 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res)
                     "RGB32/RGB24/YUY2/YV411/Y8 except 8bit-depth is not supported.\n");
     RETURN_IF_ERROR(avs_is_y8(ah->vi) && (ah->vi->width & 1 || ah->vi->height & 1), -1,
                     "in case of Y8, width and height need to be even.\n");
-    RETURN_IF_ERROR(pr->yuv_depth > 8 && (ah->vi->width & avs_is_yv24(ah->vi) ? 3 : 1), -1,
+    RETURN_IF_ERROR(pr->yuv_depth > 8 && (ah->vi->width & (avs_is_yv24(ah->vi) ? 1 : 3)), -1,
                     "clip has invalid width %d.\n", ah->vi->width);
 
     PASS_OR_TRIM;
