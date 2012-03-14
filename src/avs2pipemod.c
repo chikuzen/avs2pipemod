@@ -25,14 +25,7 @@
 
 #include "avs2pipemod.h"
 #include "avs_func.h"
-
-extern int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_do_info(params_t *pr, avs_hnd_t *ah);
-extern int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res);
-extern int act_dump_pix_values_as_txt(params_t *pr, avs_hnd_t *ah, AVS_Value res);
+#include "actions.h"
 
 static float get_avisynth_version(avs_hnd_t *ah)
 {

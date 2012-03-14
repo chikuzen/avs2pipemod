@@ -28,6 +28,7 @@
 #include "avs2pipemod.h"
 #include "wave.h"
 #include "avs_func.h"
+#include "actions.h"
 
 #define BM_FRAMES_PAR_OUT 50
 #define Y4M_FRAME_HEADER "FRAME\n"
@@ -378,14 +379,13 @@ static int preprocess_for_y4mout(params_t *pr, avs_hnd_t *ah, AVS_Value res)
                  "%19s 1:add AssumeFrameBased()  2:add Weave()  others:exit\n"
                  "%19s input a number and press enter : ",
                  "", "", "", "");
-        int k;
-        fscanf(stdin, "%d", &k);
+        int k = fgetc(stdin);
         switch (k) {
-        case 1:
+        case '1':
             res = invoke_filter(ah, res, "AssumeFrameBased");
             RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke AssumeFrameBased()\n")
             break;
-        case 2:
+        case '2':
             res = invoke_filter(ah, res, "Weave");
             RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Weave()\n")
             break;
