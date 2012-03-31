@@ -20,36 +20,34 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "avs2pipemod.h"
 
 void a2pm_log(log_level_t level, const char *message, ...)
 {
-    char *prefix;
+    char prefix[24];
     va_list args;
 
-    va_start(args, message);
-
-    switch(level) {
-    case A2PM_LOG_ERROR:
-        prefix = "error";
+    switch (level) {
+    case A2PM_LOG_INFO:
+        strcpy(prefix, "avs2pipemod[info]: ");
+        break;
+    case A2PM_LOG_REPEAT:
+        strcpy(prefix, "\ravs2pipemod[info]: ");
         break;
     case A2PM_LOG_WARNING:
-        prefix = "warning";
+        strcpy(prefix, "avs2pipemod[warning]: ");
         break;
-    case A2PM_LOG_INFO:
-    case A2PM_LOG_REPEAT:
-        prefix = "info";
+    case A2PM_LOG_ERROR:
+        strcpy(prefix, "avs2pipemod[error]: ");
         break;
     default:
-        prefix = "unknown";
-        break;
+        strcpy(prefix, "unkown[unkown]: ");
     }
+    fprintf(stderr, "%s", prefix);
 
-    if(level == A2PM_LOG_REPEAT)
-        fprintf(stderr, "\r");
-    fprintf(stderr, "avs2pipemod[%s]: ", prefix);
+    va_start(args, message);
     vfprintf(stderr, message, args);
-
     va_end(args);
 }

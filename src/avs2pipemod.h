@@ -68,9 +68,9 @@ typedef struct {
 
 typedef enum {
     A2PM_LOG_INFO,
-    A2PM_LOG_ERROR,
+    A2PM_LOG_REPEAT,
     A2PM_LOG_WARNING,
-    A2PM_LOG_REPEAT
+    A2PM_LOG_ERROR
 } log_level_t;
 
 void a2pm_log(log_level_t level, const char *message, ...);

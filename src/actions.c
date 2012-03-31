@@ -103,7 +103,7 @@ static AVS_Value invoke_convert_csp(params_t *pr, avs_hnd_t *ah, AVS_Value res, 
 
 static char *get_string_from_pix(int input_pix_type, string_target_t type)
 {
-    static const struct {
+    struct {
         int pix_type;
         char *info;
         char *video_out;
@@ -123,33 +123,44 @@ static char *get_string_from_pix(int input_pix_type, string_target_t type)
         {AVS_CS_YV16   , "YV16" , "YUV-422-planar"  , "422"     , NULL           , NULL           , "raw"                      , "i422"   , "i422"},
         {AVS_CS_YV411  , "YV411", "YUV-411-planar"  , "411"     , NULL           , NULL           , "lavf --input-fmt rawvideo", "yuv411p", "i422"},
         {AVS_CS_Y8     , "Y8"   , "luma only (gray)", "mono"    , NULL           , NULL           , "lavf --input-fmt rawvideo", "gray"   , "i420"},
-        {AVS_CS_UNKNOWN, NULL}
+        {input_pix_type , NULL}
     };
 
-    for (int i = 0; pix_string_table[i].pix_type != AVS_CS_UNKNOWN; i++)
-        if (input_pix_type == pix_string_table[i].pix_type)
-            switch (type) {
-            case TYPE_INFO:
-                return pix_string_table[i].info;
-            case TYPE_VIDEO_OUT:
-                return pix_string_table[i].video_out;
-            case TYPE_Y4M_HEADER:
-                return pix_string_table[i].y4m_header;
-            case TYPE_FILTER_26:
-                return pix_string_table[i].filter_26;
-            case TYPE_FILTER_25:
-                return pix_string_table[i].filter_25;
-            case TYPE_X264_DEMUXER:
-                return pix_string_table[i].x264_demuxer;
-            case TYPE_X264_INPUT_CSP:
-                return pix_string_table[i].x264_input_csp;
-            case TYPE_X264_OUTPUT_CSP:
-                return pix_string_table[i].x264_output_csp;
-            default:
-                break;
-            }
+    char *string;
+    int i = 0;
+    while (pix_string_table[i].pix_type != input_pix_type)
+        i++;
 
-    return "UNKNOWN";
+    switch (type) {
+    case TYPE_INFO:
+        string = pix_string_table[i].info;
+        break;
+    case TYPE_VIDEO_OUT:
+        string = pix_string_table[i].video_out;
+        break;
+    case TYPE_Y4M_HEADER:
+        string = pix_string_table[i].y4m_header;
+        break;
+    case TYPE_FILTER_26:
+        string = pix_string_table[i].filter_26;
+        break;
+    case TYPE_FILTER_25:
+        string = pix_string_table[i].filter_25;
+        break;
+    case TYPE_X264_DEMUXER:
+        string = pix_string_table[i].x264_demuxer;
+        break;
+    case TYPE_X264_INPUT_CSP:
+        string = pix_string_table[i].x264_input_csp;
+        break;
+    case TYPE_X264_OUTPUT_CSP:
+        string = pix_string_table[i].x264_output_csp;
+        break;
+    default:
+        string = "UNKNOWN";
+    }
+
+    return string;
 }
 
 static int write_riff_ext_header(wave_args_t *args)
@@ -190,7 +201,7 @@ static int write_audio_file_header(params_t *pr, avs_hnd_t *ah)
 
 static int get_chroma_shared_value(int pix_type, int is_horizontal)
 {
-    static const struct {
+    struct {
         int pix_type;
         int horizontal;
         int vertical;
@@ -201,12 +212,14 @@ static int get_chroma_shared_value(int pix_type, int is_horizontal)
         {AVS_CS_YV24   , 0, 0},
         {AVS_CS_YV16   , 1, 0},
         {AVS_CS_YV411  , 2, 0},
-        {AVS_CS_UNKNOWN, 0, 0}
+        {pix_type      , 0, 0}
     };
-    for (int i = 0; value_table[i].pix_type != AVS_CS_UNKNOWN; i++)
-        if (pix_type == value_table[i].pix_type)
-            return is_horizontal ? value_table[i].horizontal : value_table[i].vertical;
-    return 0;
+
+    int i = 0;
+    while (value_table[i].pix_type != pix_type)
+        i++;
+
+    return is_horizontal ? value_table[i].horizontal : value_table[i].vertical;
 }
 
 static int write_packed_frames(avs_hnd_t *ah)
@@ -395,9 +408,10 @@ static int preprocess_for_y4mout(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     }
 
     if (!avs_is_planar(ah->vi)) {
-        const char *convert = get_string_from_pix(ah->vi->pixel_type,
-                                                  (ah->version + 0.005) * 100 < 260 ?
-                                                  TYPE_FILTER_25 : TYPE_FILTER_26);
+        const char *convert
+            = get_string_from_pix(ah->vi->pixel_type,
+                                  (ah->version + 0.005) * 100 < 260 ?
+                                  TYPE_FILTER_25 : TYPE_FILTER_26);
         res = invoke_convert_csp(pr, ah, res, convert);
         RETURN_IF_ERROR(avs_is_error(res), -1,
                         "failed to invoke %s. please check resolution.\n", convert);
@@ -608,9 +622,9 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     while (passed < ah->vi->num_frames) {
         elapsed = get_current_time() - start;
-        a2pm_log(A2PM_LOG_REPEAT, "[elapsed %.3f sec] %d/%d frames [%3d%%][%.3ffps]",
-                 elapsed / 1000000.0, passed, ah->vi->num_frames,
-                 passed * 100 / ah->vi->num_frames, passed * 1000000.0 / elapsed);
+        fprintf(stderr, "\ravs2pipemod[info]: [elapsed %.3f sec] %d/%d frames [%3d%%][%.3ffps]",
+                elapsed / 1000000.0, passed, ah->vi->num_frames,
+                passed * 100 / ah->vi->num_frames, passed * 1000000.0 / elapsed);
         for (int f = 0; f < BM_FRAMES_PAR_OUT; f++) {
             frame = ah->func.avs_get_frame(ah->clip, passed);
             ah->func.avs_release_video_frame(frame);
@@ -629,93 +643,94 @@ int act_do_benchmark(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     RETURN_IF_ERROR(!avs_has_video(ah->vi), -1, "clip has no video.\n");
+    RETURN_IF_ERROR(ah->vi->width > 1920 || ah->vi->height > 1080, -1,
+                    "clip has unsupported resolution.\n");
     RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->format_type == A2PM_FMT_SDBD, -1,
                     "DAR 4:3 is supported only NTSC/PAL SD source\n");
 
-    const struct {
-        int width;
-        int height;
-        int fpsnum;
-        int fpsden;
+#define WHND(width,height,fpsnum,fpsden) \
+    ((uint64_t)(width) << 48 | (uint64_t)(height) << 32 | \
+     (uint64_t)(fpsnum) << 16 | (uint64_t)(fpsden))
+
+    uint64_t src_res_and_fps
+        = WHND(ah->vi->width, ah->vi->height, ah->vi->fps_numerator, ah->vi->fps_denominator);
+
+    struct {
+        uint64_t res_and_fps;
         char frame_type;
         int keyint;
         char *flag;
         int sar_x;
         int sar_y;
-        char* color;
     } bd_spec_table[] = {
         /* 1080p24 */
-        {1920, 1080, 24000, 1001, 'p', 24, ""                 ,  1,  1,     "bt709"},
-        {1920, 1080,    24,    1, 'p', 24, ""                 ,  1,  1,     "bt709"},
-        {1920, 1080,  2997,  125, 'p', 24, ""                 ,  1,  1,     "bt709"},
-        {1440, 1080, 24000, 1001, 'p', 24, ""                 ,  4,  3,     "bt709"},
-        {1440, 1080,    24,    1, 'p', 24, ""                 ,  4,  3,     "bt709"},
-        {1440, 1080,  2997,  125, 'p', 24, ""                 ,  4,  3,     "bt709"},
+        {WHND(1920, 1080, 24000, 1001), 'p', 24, ""                 ,  1,  1},
+        {WHND(1920, 1080,    24,    1), 'p', 24, ""                 ,  1,  1},
+        {WHND(1920, 1080,  2997,  125), 'p', 24, ""                 ,  1,  1},
+        {WHND(1440, 1080, 24000, 1001), 'p', 24, ""                 ,  4,  3},
+        {WHND(1440, 1080,    24,    1), 'p', 24, ""                 ,  4,  3},
+        {WHND(1440, 1080,  2997,  125), 'p', 24, ""                 ,  4,  3},
         /* 1080p25 */
-        {1920, 1080,    25,    1, 'p', 25, "--fake-interlaced",  1,  1,     "bt709"},
-        {1440, 1080,    25,    1, 'p', 25, "--fake-interlaced",  4,  3,     "bt709"},
+        {WHND(1920, 1080,    25,    1), 'p', 25, "--fake-interlaced",  1,  1},
+        {WHND(1440, 1080,    25,    1), 'p', 25, "--fake-interlaced",  4,  3},
         /* 1080p30 */
-        {1920, 1080, 30000, 1001, 'p', 30, "--fake-interlaced",  1,  1,     "bt709"},
-        {1920, 1080,  2997,  100, 'p', 30, "--fake-interlaced",  1,  1,     "bt709"},
-        {1440, 1080, 30000, 1001, 'p', 30, "--fake-interlaced",  4,  3,     "bt709"},
-        {1440, 1080,  2997,  100, 'p', 30, "--fake-interlaced",  4,  3,     "bt709"},
+        {WHND(1920, 1080, 30000, 1001), 'p', 30, "--fake-interlaced",  1,  1},
+        {WHND(1920, 1080,  2997,  100), 'p', 30, "--fake-interlaced",  1,  1},
+        {WHND(1440, 1080, 30000, 1001), 'p', 30, "--fake-interlaced",  4,  3},
+        {WHND(1440, 1080,  2997,  100), 'p', 30, "--fake-interlaced",  4,  3},
         /* 1080i25*/
-        {1920, 1080,    25,    1, 't', 25, "--tff"            ,  1,  1,     "bt709"},
-        {1440, 1080,    25,    1, 't', 25, "--tff"            ,  4,  3,     "bt709"},
+        {WHND(1920, 1080,    25,    1), 't', 25, "--tff"            ,  1,  1},
+        {WHND(1440, 1080,    25,    1), 't', 25, "--tff"            ,  4,  3},
         /* 1080i30 */
-        {1920, 1080, 30000, 1001, 't', 30, "--tff"            ,  1,  1,     "bt709"},
-        {1920, 1080,  2997,  100, 't', 30, "--tff"            ,  1,  1,     "bt709"},
-        {1920, 1080,    30,    1, 't', 30, "--tff"            ,  1,  1,     "bt709"},
-        {1440, 1080, 30000, 1001, 't', 30, "--tff"            ,  4,  3,     "bt709"},
-        {1440, 1080,  2997,  100, 't', 30, "--tff"            ,  4,  3,     "bt709"},
-        {1440, 1080,    30,    1, 't', 30, "--tff"            ,  4,  3,     "bt709"},
+        {WHND(1920, 1080, 30000, 1001), 't', 30, "--tff"            ,  1,  1},
+        {WHND(1920, 1080,  2997,  100), 't', 30, "--tff"            ,  1,  1},
+        {WHND(1920, 1080,    30,    1), 't', 30, "--tff"            ,  1,  1},
+        {WHND(1440, 1080, 30000, 1001), 't', 30, "--tff"            ,  4,  3},
+        {WHND(1440, 1080,  2997,  100), 't', 30, "--tff"            ,  4,  3},
+        {WHND(1440, 1080,    30,    1), 't', 30, "--tff"            ,  4,  3},
         /* 720p24 */
-        {1280,  720, 24000, 1001, 'p', 24, ""                 ,  1,  1,     "bt709"},
-        {1280,  720,    24,    1, 'p', 24, ""                 ,  1,  1,     "bt709"},
-        {1280,  720,  2997,  125, 'p', 24, ""                 ,  1,  1,     "bt709"},
+        {WHND(1280,  720, 24000, 1001), 'p', 24, ""                 ,  1,  1},
+        {WHND(1280,  720,    24,    1), 'p', 24, ""                 ,  1,  1},
+        {WHND(1280,  720,  2997,  125), 'p', 24, ""                 ,  1,  1},
         /* 720p25 */
-        {1280,  720,    25,    1, 'p', 25, "--pulldown double",  1,  1,     "bt709"},
+        {WHND(1280,  720,    25,    1), 'p', 25, "--pulldown double",  1,  1},
         /* 720p30 */
-        {1280,  720, 30000, 1001, 'p', 25, "--pulldown double",  1,  1,     "bt709"},
+        {WHND(1280,  720, 30000, 1001), 'p', 25, "--pulldown double",  1,  1},
         /* 720p50 */
-        {1280,  720,    50,    1, 'p', 50, ""                 ,  1,  1,     "bt709"},
+        {WHND(1280,  720,    50,    1), 'p', 50, ""                 ,  1,  1},
         /* 720p60 */
-        {1280,  720, 60000, 1001, 'p', 60, ""                 ,  1,  1,     "bt709"},
-        {1280,  720,  2997,   50, 'p', 60, ""                 ,  1,  1,     "bt709"},
+        {WHND(1280,  720, 60000, 1001), 'p', 60, ""                 ,  1,  1},
+        {WHND(1280,  720,  2997,   50), 'p', 60, ""                 ,  1,  1},
         /* 576p25 */
-        { 720,  576,    25,    1, 'p', 25, "--fake-interlaced", 16, 11,   "bt470bg"},
+        {WHND( 720,  576,    25,    1), 'p', 25, "--fake-interlaced", 16, 11},
         /* 576i25 */
-        { 720,  576,    25,    1, 't', 25, "--tff"            , 16, 11,   "bt470bg"},
+        {WHND( 720,  576,    25,    1), 't', 25, "--tff"            , 16, 11},
         /* 480p24 */
-        { 720,  480, 24000, 1001, 'p', 24, "--pulldown 32"    , 40, 33, "smpte170m"},
+        {WHND( 720,  480, 24000, 1001), 'p', 24, "--pulldown 32"    , 40, 33},
         /* 480i30*/
-        { 720,  480, 30000, 1001, 't', 30, "--tff"            , 40, 33, "smpte170m"},
-        {0}
+        {WHND( 720,  480, 30000, 1001), 't', 30, "--tff"            , 40, 33},
+        {src_res_and_fps, pr->frame_type, 0}
     };
 
-    int keyint  = 0;
-    char *flag  = NULL;
-    char *color = NULL;
-    for (int i = 0; bd_spec_table[i].width != 0; i++) {
-        if (ah->vi->width == bd_spec_table[i].width
-         && ah->vi->height == bd_spec_table[i].height
-         && ah->vi->fps_numerator == bd_spec_table[i].fpsnum
-         && ah->vi->fps_denominator == bd_spec_table[i].fpsden
-         && pr->frame_type == bd_spec_table[i].frame_type) {
-            keyint     = bd_spec_table[i].keyint;
-            flag       = bd_spec_table[i].flag;
-            color      = bd_spec_table[i].color;
-            pr->sar[0] = bd_spec_table[i].sar_x;
-            pr->sar[1] = bd_spec_table[i].sar_y;
-            break;
-        }
-    }
-    RETURN_IF_ERROR(!keyint, -1, "%dx%d @ %d/%d fps not supported.\n",
-                    ah->vi->width, ah->vi->height, ah->vi->fps_numerator, ah->vi->fps_denominator);
+#undef WHND
+
+    int i = 0;
+    while (src_res_and_fps != bd_spec_table[i].res_and_fps ||
+           pr->frame_type != bd_spec_table[i].frame_type)
+        i++;
+
+    RETURN_IF_ERROR(!bd_spec_table[i].keyint, -1,
+                    "%dx%d @ %d/%d fps not supported.\n",
+                    ah->vi->width, ah->vi->height, ah->vi->fps_numerator,
+                    ah->vi->fps_denominator);
+
+    char *color = ah->vi->height == 576 ? "bt470bg" :
+                  ah->vi->height == 480 ? "smpte170m" :
+                  "bt709";
 
     if (pr->format_type == A2PM_FMT_SDBD) {
-        pr->sar[0] = ah->vi->height == 576 ? 12 : 10;
-        pr->sar[1] = 11;
+        bd_spec_table[i].sar_x = ah->vi->height == 576 ? 12 : 10;
+        bd_spec_table[i].sar_y = 11;
     }
 
     PASS_OR_TRIM;
@@ -734,7 +749,9 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
             " --transfer %s"
             " --colormatrix %s"
             " --frames %d",
-            keyint, flag, pr->sar[0], pr->sar[1], color, color, color, ah->vi->num_frames);
+            bd_spec_table[i].keyint, bd_spec_table[i].flag,
+            bd_spec_table[i].sar_x, bd_spec_table[i].sar_y,
+            color, color, color, ah->vi->num_frames);
     return 0;
 }
 
