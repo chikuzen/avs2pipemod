@@ -648,75 +648,74 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     RETURN_IF_ERROR(ah->vi->height != 480 && ah->vi->height != 576 && pr->format_type == A2PM_FMT_SDBD, -1,
                     "DAR 4:3 is supported only NTSC/PAL SD source\n");
 
-#define WHND(width,height,fpsnum,fpsden) \
-    ((uint64_t)(width) << 48 | (uint64_t)(height) << 32 | \
-     (uint64_t)(fpsnum) << 16 | (uint64_t)(fpsden))
+#define WHNDT(width,height,fpsnum,fpsden,ftype) \
+    ((uint64_t)(width) << 48 | (uint64_t)(height) << 36 | \
+     (uint64_t)(fpsnum) << 20 | (uint64_t)(fpsden) << 8 | (uint64_t)(ftype))
 
-    uint64_t src_res_and_fps
-        = WHND(ah->vi->width, ah->vi->height, ah->vi->fps_numerator, ah->vi->fps_denominator);
+    uint64_t src_res_fps_type
+        = WHNDT(ah->vi->width, ah->vi->height,
+                ah->vi->fps_numerator, ah->vi->fps_denominator, pr->frame_type);
 
     struct {
-        uint64_t res_and_fps;
-        char frame_type;
+        uint64_t res_fps_type;
         int keyint;
         char *flag;
         int sar_x;
         int sar_y;
     } bd_spec_table[] = {
         /* 1080p24 */
-        {WHND(1920, 1080, 24000, 1001), 'p', 24, ""                 ,  1,  1},
-        {WHND(1920, 1080,    24,    1), 'p', 24, ""                 ,  1,  1},
-        {WHND(1920, 1080,  2997,  125), 'p', 24, ""                 ,  1,  1},
-        {WHND(1440, 1080, 24000, 1001), 'p', 24, ""                 ,  4,  3},
-        {WHND(1440, 1080,    24,    1), 'p', 24, ""                 ,  4,  3},
-        {WHND(1440, 1080,  2997,  125), 'p', 24, ""                 ,  4,  3},
+        {WHNDT(1920, 1080, 24000, 1001, 'p'), 24, ""                 ,  1,  1},
+        {WHNDT(1920, 1080,    24,    1, 'p'), 24, ""                 ,  1,  1},
+        {WHNDT(1920, 1080,  2997,  125, 'p'), 24, ""                 ,  1,  1},
+        {WHNDT(1440, 1080, 24000, 1001, 'p'), 24, ""                 ,  4,  3},
+        {WHNDT(1440, 1080,    24,    1, 'p'), 24, ""                 ,  4,  3},
+        {WHNDT(1440, 1080,  2997,  125, 'p'), 24, ""                 ,  4,  3},
         /* 1080p25 */
-        {WHND(1920, 1080,    25,    1), 'p', 25, "--fake-interlaced",  1,  1},
-        {WHND(1440, 1080,    25,    1), 'p', 25, "--fake-interlaced",  4,  3},
+        {WHNDT(1920, 1080,    25,    1, 'p'), 25, "--fake-interlaced",  1,  1},
+        {WHNDT(1440, 1080,    25,    1, 'p'), 25, "--fake-interlaced",  4,  3},
         /* 1080p30 */
-        {WHND(1920, 1080, 30000, 1001), 'p', 30, "--fake-interlaced",  1,  1},
-        {WHND(1920, 1080,  2997,  100), 'p', 30, "--fake-interlaced",  1,  1},
-        {WHND(1440, 1080, 30000, 1001), 'p', 30, "--fake-interlaced",  4,  3},
-        {WHND(1440, 1080,  2997,  100), 'p', 30, "--fake-interlaced",  4,  3},
+        {WHNDT(1920, 1080, 30000, 1001, 'p'), 30, "--fake-interlaced",  1,  1},
+        {WHNDT(1920, 1080,  2997,  100, 'p'), 30, "--fake-interlaced",  1,  1},
+        {WHNDT(1440, 1080, 30000, 1001, 'p'), 30, "--fake-interlaced",  4,  3},
+        {WHNDT(1440, 1080,  2997,  100, 'p'), 30, "--fake-interlaced",  4,  3},
         /* 1080i25*/
-        {WHND(1920, 1080,    25,    1), 't', 25, "--tff"            ,  1,  1},
-        {WHND(1440, 1080,    25,    1), 't', 25, "--tff"            ,  4,  3},
+        {WHNDT(1920, 1080,    25,    1, 't'), 25, "--tff"            ,  1,  1},
+        {WHNDT(1440, 1080,    25,    1, 't'), 25, "--tff"            ,  4,  3},
         /* 1080i30 */
-        {WHND(1920, 1080, 30000, 1001), 't', 30, "--tff"            ,  1,  1},
-        {WHND(1920, 1080,  2997,  100), 't', 30, "--tff"            ,  1,  1},
-        {WHND(1920, 1080,    30,    1), 't', 30, "--tff"            ,  1,  1},
-        {WHND(1440, 1080, 30000, 1001), 't', 30, "--tff"            ,  4,  3},
-        {WHND(1440, 1080,  2997,  100), 't', 30, "--tff"            ,  4,  3},
-        {WHND(1440, 1080,    30,    1), 't', 30, "--tff"            ,  4,  3},
+        {WHNDT(1920, 1080, 30000, 1001, 't'), 30, "--tff"            ,  1,  1},
+        {WHNDT(1920, 1080,  2997,  100, 't'), 30, "--tff"            ,  1,  1},
+        {WHNDT(1920, 1080,    30,    1, 't'), 30, "--tff"            ,  1,  1},
+        {WHNDT(1440, 1080, 30000, 1001, 't'), 30, "--tff"            ,  4,  3},
+        {WHNDT(1440, 1080,  2997,  100, 't'), 30, "--tff"            ,  4,  3},
+        {WHNDT(1440, 1080,    30,    1, 't'), 30, "--tff"            ,  4,  3},
         /* 720p24 */
-        {WHND(1280,  720, 24000, 1001), 'p', 24, ""                 ,  1,  1},
-        {WHND(1280,  720,    24,    1), 'p', 24, ""                 ,  1,  1},
-        {WHND(1280,  720,  2997,  125), 'p', 24, ""                 ,  1,  1},
+        {WHNDT(1280,  720, 24000, 1001, 'p'), 24, ""                 ,  1,  1},
+        {WHNDT(1280,  720,    24,    1, 'p'), 24, ""                 ,  1,  1},
+        {WHNDT(1280,  720,  2997,  125, 'p'), 24, ""                 ,  1,  1},
         /* 720p25 */
-        {WHND(1280,  720,    25,    1), 'p', 25, "--pulldown double",  1,  1},
+        {WHNDT(1280,  720,    25,    1, 'p'), 25, "--pulldown double",  1,  1},
         /* 720p30 */
-        {WHND(1280,  720, 30000, 1001), 'p', 25, "--pulldown double",  1,  1},
+        {WHNDT(1280,  720, 30000, 1001, 'p'), 25, "--pulldown double",  1,  1},
         /* 720p50 */
-        {WHND(1280,  720,    50,    1), 'p', 50, ""                 ,  1,  1},
+        {WHNDT(1280,  720,    50,    1, 'p'), 50, ""                 ,  1,  1},
         /* 720p60 */
-        {WHND(1280,  720, 60000, 1001), 'p', 60, ""                 ,  1,  1},
-        {WHND(1280,  720,  2997,   50), 'p', 60, ""                 ,  1,  1},
+        {WHNDT(1280,  720, 60000, 1001, 'p'), 60, ""                 ,  1,  1},
+        {WHNDT(1280,  720,  2997,   50, 'p'), 60, ""                 ,  1,  1},
         /* 576p25 */
-        {WHND( 720,  576,    25,    1), 'p', 25, "--fake-interlaced", 16, 11},
+        {WHNDT( 720,  576,    25,    1, 'p'), 25, "--fake-interlaced", 16, 11},
         /* 576i25 */
-        {WHND( 720,  576,    25,    1), 't', 25, "--tff"            , 16, 11},
+        {WHNDT( 720,  576,    25,    1, 't'), 25, "--tff"            , 16, 11},
         /* 480p24 */
-        {WHND( 720,  480, 24000, 1001), 'p', 24, "--pulldown 32"    , 40, 33},
+        {WHNDT( 720,  480, 24000, 1001, 'p'), 24, "--pulldown 32"    , 40, 33},
         /* 480i30*/
-        {WHND( 720,  480, 30000, 1001), 't', 30, "--tff"            , 40, 33},
-        {src_res_and_fps, pr->frame_type, 0}
+        {WHNDT( 720,  480, 30000, 1001, 't'), 30, "--tff"            , 40, 33},
+        {src_res_fps_type, 0}
     };
 
-#undef WHND
+#undef WHNDT
 
     int i = 0;
-    while (src_res_and_fps != bd_spec_table[i].res_and_fps ||
-           pr->frame_type != bd_spec_table[i].frame_type)
+    while (src_res_fps_type != bd_spec_table[i].res_fps_type)
         i++;
 
     RETURN_IF_ERROR(!bd_spec_table[i].keyint, -1,
