@@ -55,6 +55,7 @@ typedef enum {
     A2PM_FMT_NOTHING
 } format_type_t;
 
+#define STR_BUF_SIZE 128
 typedef struct {
     action_t      action;
     format_type_t format_type;
@@ -64,6 +65,7 @@ typedef struct {
     char          frame_type;
     char         *bit;
     int           yuv_depth;
+    char          str_buf[STR_BUF_SIZE];
 } params_t;
 
 typedef enum {

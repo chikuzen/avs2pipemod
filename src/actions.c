@@ -40,6 +40,13 @@
         RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Trim.\n"); \
     }
 
+#define READ_ERROR_CHECK \
+    const char *err = ah->func.avs_clip_get_error(ah->clip); \
+    if (err) { \
+        a2pm_log(A2PM_LOG_ERROR, "%s occurred while reading frame %d\n", err, wrote); \
+        break; \
+    }
+
 typedef enum {
     TYPE_INFO,
     TYPE_VIDEO_OUT,
@@ -51,10 +58,10 @@ typedef enum {
     TYPE_X264_OUTPUT_CSP
 } string_target_t;
 
-static int64_t get_current_time(void)
+static inline int64_t get_current_time(void)
 {
     struct timeb tb;
-    ftime( &tb );
+    ftime(&tb);
     return ((int64_t)tb.time * 1000 + (int64_t)tb.millitm) * 1000;
 }
 
@@ -84,7 +91,7 @@ static AVS_Value invoke_trim(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     return update_clip(ah, tmp, res);
 }
 
-static AVS_Value invoke_convert_csp(params_t *pr, avs_hnd_t *ah, AVS_Value res, const char *filter)
+static AVS_Value invoke_convert_csp(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 {
     const char *matrix = ah->vi->height < 720 ? "Rec601" : "Rec709";
     const char *arg_name[3] = {NULL, "interlaced", "matrix"};
@@ -92,11 +99,11 @@ static AVS_Value invoke_convert_csp(params_t *pr, avs_hnd_t *ah, AVS_Value res, 
                             avs_new_value_string(matrix)};
     if (avs_is_yuy2(ah->vi))
         a2pm_log(A2PM_LOG_INFO, "invoking %s(interlaced=%s) ...\n",
-                 filter, pr->frame_type != 'p' ? "true" : "false");
+                 pr->str_buf, pr->frame_type != 'p' ? "true" : "false");
     else
         a2pm_log(A2PM_LOG_INFO, "invoking %s(matrix=%s,interlaced=%s) ...\n",
-                 filter, matrix, pr->frame_type != 'p' ? "true" : "false");
-    AVS_Value tmp = ah->func.avs_invoke(ah->env, filter,
+                 pr->str_buf, matrix, pr->frame_type != 'p' ? "true" : "false");
+    AVS_Value tmp = ah->func.avs_invoke(ah->env, pr->str_buf,
                                         avs_new_value_array(arg_arr, avs_is_yuy2(ah->vi) ? 2 : 3), arg_name);
     return update_clip(ah, tmp, res);
 }
@@ -230,15 +237,17 @@ static int write_packed_frames(avs_hnd_t *ah)
     BYTE *buff = (BYTE*)malloc(count);
     RETURN_IF_ERROR(!buff, 0, "malloc failed at %s.\n", __func__);
 
-    int wrote;
-    for (wrote = 0; wrote < ah->vi->num_frames; wrote++) {
+    int wrote = 0;
+    while (wrote < ah->vi->num_frames) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
+        READ_ERROR_CHECK;
         ah->func.avs_bit_blt(ah->env, buff, width, avs_get_read_ptr(frame),
                              avs_get_pitch(frame), width, ah->vi->height);
         size_t step = fwrite(buff, sizeof(BYTE), count, stdout);
         ah->func.avs_release_video_frame(frame);
         if (step != count)
             break;
+        wrote++;
     }
     free(buff);
     return wrote;
@@ -255,8 +264,7 @@ static int write_packed_pix_values(avs_hnd_t *ah)
     int wrote = 0;
     while (wrote < ah->vi->num_frames) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
-        const char *err = ah->func.avs_clip_get_error(ah->clip);
-        RETURN_IF_ERROR(err, wrote, "%s occurred while reading frame %d\n", err, wrote);
+        READ_ERROR_CHECK;
         fprintf(stdout, "frame %d\n", wrote);
         int step = 0;
         const BYTE *pix_value = avs_get_read_ptr(frame);
@@ -324,6 +332,7 @@ static int write_planar_frames(params_t *pr, avs_hnd_t *ah)
     int wrote = 0;
     while (wrote < ah->vi->num_frames) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
+        READ_ERROR_CHECK;
         BYTE *buff_ptr = buff_0;
         for (int p = 0; p < pp->num_planes; p++) {
             ah->func.avs_bit_blt(ah->env, buff_ptr, pp->width[p], avs_get_read_ptr_p(frame, pp->planes[p]),
@@ -352,11 +361,7 @@ static int write_planar_pix_values(avs_hnd_t *ah)
     int wrote = 0;
     while (wrote < ah->vi->num_frames) {
         AVS_VideoFrame *frame = ah->func.avs_get_frame(ah->clip, wrote);
-        const char *err = ah->func.avs_clip_get_error(ah->clip);
-        if (err) {
-            a2pm_log(A2PM_LOG_ERROR, "%s occurred while reading frame %d\n", err, wrote);
-            break;
-        }
+        READ_ERROR_CHECK;
 
         fprintf(stdout, "frame %d\n", wrote);
         int step = 0;
@@ -393,28 +398,20 @@ static int preprocess_for_y4mout(params_t *pr, avs_hnd_t *ah, AVS_Value res)
                  "%19s input a number and press enter : ",
                  "", "", "", "");
         int k = fgetc(stdin);
-        switch (k) {
-        case '1':
-            res = invoke_filter(ah, res, "AssumeFrameBased");
-            RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke AssumeFrameBased()\n")
-            break;
-        case '2':
-            res = invoke_filter(ah, res, "Weave");
-            RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke Weave()\n")
-            break;
-        default:
-            RETURN_IF_ERROR(1, -1, "good bye...\n");
-        }
+        RETURN_IF_ERROR((k != '1' && k != '2'), -1, "good bye...\n");
+        snprintf(pr->str_buf, STR_BUF_SIZE, "%s", k == '1' ? "AssumeFrameBased" : "Weave");
+        res = invoke_filter(ah, res, pr->str_buf);
+        RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke %s()\n", pr->str_buf);
     }
 
     if (!avs_is_planar(ah->vi)) {
-        const char *convert
-            = get_string_from_pix(ah->vi->pixel_type,
-                                  (ah->version + 0.005) * 100 < 260 ?
-                                  TYPE_FILTER_25 : TYPE_FILTER_26);
-        res = invoke_convert_csp(pr, ah, res, convert);
+        snprintf(pr->str_buf, STR_BUF_SIZE, "%s",
+                 get_string_from_pix(ah->vi->pixel_type,
+                                     (ah->version + 0.005) * 100 < 260 ?
+                                     TYPE_FILTER_25 : TYPE_FILTER_26));
+        res = invoke_convert_csp(pr, ah, res);
         RETURN_IF_ERROR(avs_is_error(res), -1,
-                        "failed to invoke %s. please check resolution.\n", convert);
+                        "failed to invoke %s. please check resolution.\n", pr->str_buf);
     }
 
     return 0;
@@ -437,12 +434,9 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     RETURN_IF_ERROR(_setmode(_fileno(stdout), _O_BINARY) == -1, -1,
                     "cannot switch stdout to binary mode.\n");
 
-#define MESSAGE_LEN_MAX 128
-    char *start_message = (char *)malloc(MESSAGE_LEN_MAX);
-    RETURN_IF_ERROR(!start_message, -1, "malloc failed at %s.\n", __func__);
     switch (pr->format_type) {
     case A2PM_FMT_YUV4MPEG2:
-        snprintf(start_message, MESSAGE_LEN_MAX,
+        snprintf(pr->str_buf, STR_BUF_SIZE,
                 "writing %d frames of %d/%d fps, %dx%d,\n"
                 "%19s sar %d:%d, %s %s video.\n",
                 ah->vi->num_frames, ah->vi->fps_numerator, ah->vi->fps_denominator,
@@ -451,15 +445,13 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
                 pr->frame_type == 'p' ? "progressive" : pr->frame_type == 't' ? "tff" : "bff");
         break;
     default:
-        snprintf(start_message, MESSAGE_LEN_MAX,
+        snprintf(pr->str_buf, STR_BUF_SIZE,
                 "writing %d frames of %dx%d %s rawvideo.\n",
                 ah->vi->num_frames, ah->vi->width, ah->vi->height,
                 get_string_from_pix(ah->vi->pixel_type, TYPE_VIDEO_OUT));
         break;
     }
-    a2pm_log(A2PM_LOG_INFO, "%s", start_message);
-    free(start_message);
-#undef MESSAGE_LEN_MAX
+    a2pm_log(A2PM_LOG_INFO, "%s", pr->str_buf);
 
     int64_t start = get_current_time();
 
@@ -483,7 +475,8 @@ int act_do_video(params_t *pr, avs_hnd_t *ah, AVS_Value res)
     a2pm_log(A2PM_LOG_INFO, "total elapsed time is %.3f sec [%.3ffps].\n",
              elapsed / 1000000.0, wrote * 1000000.0 / elapsed);
 
-    RETURN_IF_ERROR(wrote != ah->vi->num_frames, -1, "only wrote %d of %d frames.\n", wrote, ah->vi->num_frames);
+    RETURN_IF_ERROR(wrote != ah->vi->num_frames, -1,
+                    "only wrote %d of %d frames.\n", wrote, ah->vi->num_frames);
 
     return 0;
 }
@@ -496,12 +489,9 @@ int act_do_audio(params_t *pr, avs_hnd_t *ah, AVS_Value res)
         PASS_OR_TRIM;
 
     if (pr->bit) {
-        char tmp[20];
-        if (sprintf(tmp, "ConvertAudioTo%s", pr->bit) != EOF) {
-            const char *filter = tmp;
-            res = invoke_filter(ah, res, filter);
-            RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke %s()\n", filter);
-        }
+        snprintf(pr->str_buf, STR_BUF_SIZE, "ConvertAudioTo%s", pr->bit);
+        res = invoke_filter(ah, res, pr->str_buf);
+        RETURN_IF_ERROR(avs_is_error(res), -1, "failed to invoke %s()\n", pr->str_buf);
     }
 
     size_t step = 0;
@@ -723,9 +713,9 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
                     ah->vi->width, ah->vi->height, ah->vi->fps_numerator,
                     ah->vi->fps_denominator);
 
-    char *color = ah->vi->height == 576 ? "bt470bg" :
-                  ah->vi->height == 480 ? "smpte170m" :
-                  "bt709";
+    sprintf(pr->str_buf, "%s", ah->vi->height == 576 ? "bt470bg" :
+                               ah->vi->height == 480 ? "smpte170m" :
+                                                       "bt709");
 
     if (pr->format_type == A2PM_FMT_SDBD) {
         bd_spec_table[i].sar_x = ah->vi->height == 576 ? 12 : 10;
@@ -750,7 +740,7 @@ int act_do_x264bd(params_t *pr, avs_hnd_t *ah, AVS_Value res)
             " --frames %d",
             bd_spec_table[i].keyint, bd_spec_table[i].flag,
             bd_spec_table[i].sar_x, bd_spec_table[i].sar_y,
-            color, color, color, ah->vi->num_frames);
+            pr->str_buf, pr->str_buf, pr->str_buf, ah->vi->num_frames);
     return 0;
 }
 
@@ -766,9 +756,9 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res)
 
     PASS_OR_TRIM;
 
-    char string_for_time[32] = "";
     if (pr->format_type == A2PM_FMT_WITHOUT_TCFILE)
-        sprintf(string_for_time, " --fps %d/%d", ah->vi->fps_numerator, ah->vi->fps_denominator);
+        snprintf(pr->str_buf, STR_BUF_SIZE, " --fps %d/%d",
+                 ah->vi->fps_numerator, ah->vi->fps_denominator);
 
     fprintf(stdout,
             " - --demuxer %s"
@@ -784,7 +774,7 @@ int act_do_x264raw(params_t *pr, avs_hnd_t *ah, AVS_Value res)
             pr->yuv_depth > 8 ? ah->vi->width >> 1 : ah->vi->width, ah->vi->height,
             get_string_from_pix(ah->vi->pixel_type, TYPE_X264_OUTPUT_CSP),
             ah->vi->num_frames,
-            string_for_time);
+            pr->str_buf);
     return 0;
 }
 
