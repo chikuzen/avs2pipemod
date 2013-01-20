@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 
-#define A2PM_VERSION "0.4.1"
+#define A2PM_VERSION "0.4.2"
 
 #define RETURN_IF_ERROR(cond, ret, ...) \
     if (cond) {a2pm_log(A2PM_LOG_ERROR, __VA_ARGS__); return ret;}
