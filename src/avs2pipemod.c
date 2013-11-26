@@ -97,7 +97,7 @@ static AVS_Value initialize_avisynth(params_t *pr, avs_hnd_t *ah)
         res = temp;
     }
 #endif
-    RETURN_IF_ERROR(!avs_is_clip(res), res, "'%s' didn't return a varid clip\n", pr->input);
+    RETURN_IF_ERROR(!avs_is_clip(res), res, "'%s' didn't return a valid clip\n", pr->input);
     ah->clip = ah->func.avs_take_clip(res, ah->env);
     ah->vi = ah->func.avs_get_video_info(ah->clip);
 
