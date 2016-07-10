@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Oka Motofumi <chikuzen.mo at gmail dot com>
+ * Copyright (C) 2012-2016 Oka Motofumi <chikuzen.mo at gmail dot com>
  *
  * This file is part of avs2pipemod.
  *
@@ -21,60 +21,93 @@
 #ifndef AVS2PIPEMOD_H
 #define AVS2PIPEMOD_H
 
-#include <stdint.h>
 
-#define A2PM_VERSION "0.4.2"
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#define NOGDI
+#include <windows.h>
+#include <avisynth.h>
 
-#define RETURN_IF_ERROR(cond, ret, ...) \
-    if (cond) {a2pm_log(A2PM_LOG_ERROR, __VA_ARGS__); return ret;}
+#define A2PM_VERSION "1.0.0"
 
 
-typedef enum {
+enum action_t {
+    A2PM_ACT_INFO,
+    A2PM_ACT_BENCHMARK,
     A2PM_ACT_AUDIO,
     A2PM_ACT_VIDEO,
-    A2PM_ACT_INFO,
-    A2PM_ACT_X264BD,
-    A2PM_ACT_BENCHMARK,
-    A2PM_ACT_X264RAW,
     A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT,
+#if 0
+    A2PM_ACT_X264BD,
+    A2PM_ACT_X264RAW,
+#endif
     A2PM_ACT_NOTHING
-} action_t;
+};
 
-typedef enum {
-    A2PM_FMT_RAWVIDEO,
-    A2PM_FMT_RAWVIDEO_VFLIP,
-    A2PM_FMT_YUV4MPEG2,
-    A2PM_FMT_RAWAUDIO,
-    A2PM_FMT_WAVEFORMATEX,
-    A2PM_FMT_WAVEFORMATEXTENSIBLE,
- //   A2PM_FMT_RF64,
-    A2PM_FMT_HDBD,
-    A2PM_FMT_SDBD,
-    A2PM_FMT_WITHOUT_TCFILE,
-    A2PM_FMT_WITH_TCFILE,
-    A2PM_FMT_NOTHING
-} format_type_t;
+enum format_type_t{
+    FMT_RAWVIDEO,
+    FMT_RAWVIDEO_VFLIP,
+    FMT_YUV4MPEG2,
+    FMT_RAWAUDIO,
+    FMT_WAVEFORMATEX,
+    FMT_WAVEFORMATEXTENSIBLE,
+#if 0
+    FMT_HDBD,
+    FMT_SDBD,
+    FMT_WITHOUT_TCFILE,
+    FMT_WITH_TCFILE,
+#endif
+    FMT_NOTHING
+};
 
-#define STR_BUF_SIZE 128
-typedef struct {
-    action_t      action;
+
+struct Params {
+    action_t action;
     format_type_t format_type;
-    int           sar[2];
-    int           trim[2];
-    char         *input;
-    char          frame_type;
-    char         *bit;
-    int           yuv_depth;
-    char          str_buf[STR_BUF_SIZE];
-} params_t;
+    int sar[2];
+    int trim[2];
+    char frame_type;
+    char* bit;
+    int yuv_depth;
+    char* dll_path;
+};
 
-typedef enum {
-    A2PM_LOG_INFO,
-    A2PM_LOG_REPEAT,
-    A2PM_LOG_WARNING,
-    A2PM_LOG_ERROR
-} log_level_t;
 
-void a2pm_log(log_level_t level, const char *message, ...);
+typedef IScriptEnvironment ise_t;
+
+class Avs2PipeMod {
+    HMODULE dll;
+    ise_t* env;
+    PClip clip;
+    VideoInfo vi;
+    float version;
+    const char* input;
+    int sampleSize; //bytes
+    bool isPlusMT;
+
+    void invokeFilter(const char* filter, AVSValue args, const char** names=nullptr);
+    void trim(int* args);
+    void prepareY4MOut(Params& params);
+    int writeFrames(bool is_y4mout);
+
+    template <typename T, bool IS_PLANAR>
+    int writePixValuesAsText();
+
+public:
+    Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input);
+    ~Avs2PipeMod();
+    void info(bool act_info);
+    void benchmark(Params& params);
+    void outAudio(Params& params);
+    void outVideo(Params& params);
+    void dumpPixValues(Params& params);
+#if 0
+    void x264bd(Params& params);
+    void x264raw(Params& params);
+#endif
+    static Avs2PipeMod* create(const char* input, const char* dll_path);
+};
+
+
 
 #endif /* AVS2PIPEMOD_H */

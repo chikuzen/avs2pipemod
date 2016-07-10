@@ -8,13 +8,22 @@ Differences with original
 * contents of 'info'
 * New option 'benchmark'.
 * New option 'trim'.
-* New option 'x264raw'
 * New option 'dumptxt'
 * 'y4mp', 'y4mt', 'y4mb' and 'rawvideo' options instead of 'video'.
 * FieldBased input will be corrected to framebased on yuv4mpeg2 output modes.
 * Colorspace conversion that takes colormatrix and interlace into consideration.
 * 'wav', 'extwav' and 'rawaudio' option instead of 'audio'.
 * Convert bit depth function in audio output mode.
-* Only the compilation with mingw/msys is supported.
+
+
+Usage
+	Execute avs2pipemod.exe without any options.
+	Then help will be displayed.
+
+Requirement
+	- Avisynth2.6.0/Avisynth+r1576 or later.
+	- Windows Vista sp2 or later.
+	- Microsoft Visual C++ 2015 Redistributable Update 3
+
 
                                         written by Oka Motofumi

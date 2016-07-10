@@ -33,3 +33,14 @@
 
 *.diff
 *.patch
+
+*.db
+*.opendb
+*.sln
+*.filters
+
+vs2015/Release/*
+vs2015/Debug/*
+vs2015/x64/*
+vs2015/.vs/*
+archives/*

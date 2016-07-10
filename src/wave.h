@@ -1,5 +1,5 @@
 /* 
- * Copyright (C) 2010-2011 Oka Motofumi <chikuzen.mo at gmail dot com>
+ * Copyright (C) 2010-2016 Oka Motofumi <chikuzen.mo at gmail dot com>
  *                         Chris Beswick <chris.beswick@gmail.com>
  *
  * This file is part of avs2pipemod.
@@ -27,31 +27,23 @@
 
 #include <stdint.h>
 
-typedef enum WaveFormatType WaveFormatType;
-typedef struct WaveGuid WaveGuid;
-typedef struct WaveChunkHeader WaveChunkHeader;
-typedef struct WaveRiffChunk WaveRiffChunk;
-typedef struct WaveDs64Chunk WaveDs64Chunk;
-typedef struct WaveFormatChunk WaveFormatChunk;
-typedef struct WaveFormatExtChunk WaveFormatExtChunk;
-typedef struct WaveFactChunk WaveFactChunk;
-typedef struct WaveDataChunk WaveDataChunk;
-typedef struct WaveRiffHeader WaveRiffHeader;
-typedef struct WaveRiffExtHeader WaveRiffExtHeader;
-typedef struct WaveRf64Header WaveRf64Header;
 
 
-#define WAVE_FOURCC(ch0, ch1, ch2, ch3) \
-    ((uint32_t)(uint8_t)(ch0) | ((uint32_t)(uint8_t)(ch1) << 8) |\
-    ((uint32_t)(uint8_t)(ch2) << 16) | ((uint32_t)(uint8_t)(ch3) << 24 ))
 
-enum WaveFormatType {
+static inline uint32_t WAVE_FOURCC(const char* str)
+{
+    return *reinterpret_cast<const uint32_t*>(str);
+}
+
+
+enum WaveFormatType : uint32_t {
     WAVE_FORMAT_PCM         = 0x0001,   // samples are ints
     WAVE_FORMAT_IEEE_FLOAT  = 0x0003,   // samples are floats
     WAVE_FORMAT_EXTENSIBLE  = 0xFFFE    // not a real type.
 };
 
-enum speaker_position {
+
+enum speaker_position : uint32_t {
     WAV_FL  = 0x0001,
     WAV_FR  = 0x0002,
     WAV_FC  = 0x0004,
@@ -62,8 +54,18 @@ enum speaker_position {
     WAV_FRC = 0x0080,
     WAV_BC  = 0x0100,
     WAV_SL  = 0x0200,
-    WAV_SR  = 0x0400
+    WAV_SR  = 0x0400,
 };
+
+
+struct wave_args_t {
+    WaveFormatType format;
+    int channels;
+    int sample_rate;
+    int byte_depth;
+    int64_t samples;
+};
+
 
 // set packing alignment to 1 byte so we can just fwrite structs
 // gcc docs say it supports this to be compatable with vs.
@@ -113,16 +115,8 @@ struct WaveFormatChunk {
     uint16_t        ext_size;
 };
 
-// wave format chunk based on WAVE_FORMAT_EXTENSIBLE
+
 struct WaveFormatExtChunk {
-    WaveChunkHeader header;         // id = FMT_, size = sizeof(WaveFormatChunk) - sizeof(header)
-    uint16_t        tag;            // WAVE_FORMAT_EXTENSIBLE
-    uint16_t        channels;       // number of channels
-    uint32_t        sample_rate;    // samples per second per channel
-    uint32_t        byte_rate;      // bytes per second per channel
-    uint16_t        block_align;    // number of channels * bytes per sample
-    uint16_t        bit_depth;      // bits per sample
-    uint16_t        ext_size;       // sizeof(valid_bits + channel_mask + sub_format)
     uint16_t        valid_bits;     // equal to bit_depth if uncompressed
     uint32_t        channel_mask;   // speaker position mask
     WaveGuid        sub_format;     // guid of sub format eg. pcm, float, ...
@@ -144,38 +138,24 @@ struct WaveRiffHeader {
     WaveRiffChunk   riff;
     WaveFormatChunk format;
     WaveDataChunk   data;
+    WaveRiffHeader(wave_args_t& a, size_t header_size=sizeof(WaveRiffHeader));
 };
 
 // complete RIFF header for a WAVE_FORMAT_EXTENSIBLE file
 struct WaveRiffExtHeader {
     WaveRiffChunk   riff;
-    WaveFormatExtChunk format;
+    WaveFormatChunk format;
+    uint16_t valid_bits;
+    uint32_t channel_mask;
+    WaveGuid sub_format;
     WaveFactChunk   fact;
     WaveDataChunk   data;
+    WaveRiffExtHeader(wave_args_t& a);
 };
 
-// complete RF64 header, see http://tech.ebu.ch/docs/tech/tech3306-2009.pdf
-struct WaveRf64Header {
-    WaveRiffChunk   riff;           // id = RF64
-    WaveDs64Chunk   ds64;
-    WaveFormatExtChunk format;
-    WaveFactChunk   fact;
-    WaveDataChunk   data;
-};
 
 // pop previous packing alignment
 #pragma pack(pop)
 
-typedef struct {
-    WaveFormatType format;
-    uint16_t       channels;
-    uint32_t       sample_rate;
-    uint16_t       byte_depth;
-    uint64_t       samples;
-} wave_args_t;
-
-WaveRiffHeader *wave_create_riff_header(wave_args_t *a);
-WaveRiffExtHeader *wave_create_riff_ext_header(wave_args_t *a);
-//WaveRf64Header *wave_create_rf64_header(wave_args_t *a);
 
 #endif // WAVE_H
