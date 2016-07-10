@@ -73,7 +73,7 @@ Avs2PipeMod::~Avs2PipeMod()
 void Avs2PipeMod::
 invokeFilter(const char* filter, AVSValue args, const char** names)
 {
-    a2pm_log(LOG_INFO, "invoking %s ...", filter);
+    a2pm_log(LOG_INFO, "invoking %s ...\n", filter);
     try {
         clip = env->Invoke(filter, args, names).AsClip();
         vi = clip->GetVideoInfo();
@@ -274,6 +274,9 @@ void Avs2PipeMod::prepareY4MOut(Params& params)
             vi.height < 720 ? "Rec601" : "Rec709"
         };
         invokeFilter("ConvertToYV24", AVSValue(args, 3), names);
+    }
+    if (sampleSize == 4) {
+        invokeFilter("ConvertTo16bit", clip);
     }
 }
 
