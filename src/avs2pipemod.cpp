@@ -211,8 +211,8 @@ void Avs2PipeMod::outAudio(Params& params)
     size_t count = vi.audio_samples_per_second;
     size_t size = vi.BytesPerChannelSample() * vi.nchannels;
     uint64_t target = vi.num_audio_samples;
-    std::vector<void*> buff(size * count);
-    void* data = buff.data();
+    std::vector<uint8_t> buff(size * count);
+    uint8_t* data = buff.data();
 
     a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %zu channel audio.\n",
              1.0 * target / count, count, vi.nchannels);
