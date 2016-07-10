@@ -25,9 +25,6 @@
 #include <fcntl.h>
 #include <cstdio>
 #include <cinttypes>
-#include <vector>
-#include <malloc.h>
-
 
 #include "avs2pipemod.h"
 #include "utils.h"
@@ -42,6 +39,7 @@ static inline int64_t get_current_time(void)
     ftime(&tb);
     return ((int64_t)tb.time * 1000 + (int64_t)tb.millitm) * 1000;
 }
+
 
 
 Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in) :
@@ -211,12 +209,11 @@ void Avs2PipeMod::outAudio(Params& params)
     size_t count = vi.audio_samples_per_second;
     size_t size = vi.BytesPerChannelSample() * vi.nchannels;
     uint64_t target = vi.num_audio_samples;
-    std::vector<uint8_t> buff(size * count);
-    uint8_t* data = buff.data();
+    auto buff = Buffer(size * count);
+    void* data = buff.data();
 
     a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %zu channel audio.\n",
              1.0 * target / count, count, vi.nchannels);
-
 
     int64_t elapsed = get_current_time();
 
@@ -286,8 +283,8 @@ int Avs2PipeMod::writeFrames(bool is_y4mout)
     const int planes[] = { 0, PLANAR_U, PLANAR_V };
     const int num_planes = (vi.pixel_type & VideoInfo::CS_INTERLEAVED) ? 1 : 3;
     const size_t buffsize = vi.width * vi.height * vi.BytesFromPixels(1);
-    uint8_t* buff = reinterpret_cast<uint8_t*>(_aligned_malloc(buffsize, 64));
-    validate(!buff, "failed to allocate buffer.");
+    auto b = Buffer(buffsize, 64);
+    uint8_t* buff = reinterpret_cast<uint8_t*>(b.data());
 
     int wrote = 0;
     while (wrote < vi.num_frames) {
@@ -319,7 +316,6 @@ int Avs2PipeMod::writeFrames(bool is_y4mout)
 
 finish:
     fflush(stdout);
-    _aligned_free(buff);
     return wrote;
 }
 

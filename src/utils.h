@@ -45,6 +45,13 @@ const char* get_string_y4mheader(int pix_type, int bits);
 
 //const char* get_string_filter(int pix_type);
 
+class Buffer {
+    void* buff;
+public:
+    Buffer(size_t size, size_t align = 16);
+    ~Buffer();
+    void* data();
+};
 
 #endif
 

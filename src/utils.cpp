@@ -20,6 +20,7 @@
 
 
 #include <cstdio>
+#include <malloc.h>
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #define NOMINMAX
@@ -187,3 +188,23 @@ x264raw_t get_string_x264raw(int pix_type)
     }
 }
 #endif
+
+Buffer::Buffer(size_t size, size_t align)
+{
+    buff = _aligned_malloc(size, align);
+    if (!buff) {
+        throw std::runtime_error("failed to allocate buffer.");
+    }
+}
+
+Buffer::~Buffer()
+{
+    _aligned_free(buff);
+    buff = nullptr;
+}
+
+void* Buffer::data()
+{
+    return buff;
+}
+
