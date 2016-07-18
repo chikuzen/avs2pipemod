@@ -38,6 +38,7 @@
 *.opendb
 *.sln
 *.filters
+*.user
 
 vs2015/Release/*
 vs2015/Debug/*

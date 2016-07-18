@@ -322,7 +322,7 @@ finish:
 
 void Avs2PipeMod::outVideo(Params& params)
 {
-    validate(!vi.HasAudio(), "clip has no audio.\n");
+    validate(!vi.HasVideo(), "clip has no video.\n");
     trim(params.trim);
 
     validate(_setmode(_fileno(stdout), _O_BINARY) == -1,
