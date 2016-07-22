@@ -113,7 +113,7 @@ void Avs2PipeMod::info(bool act_info)
         printf("v:fps            %u/%u\n", vi.fps_numerator, vi.fps_denominator);
         printf("v:frames         %d\n", vi.num_frames);
         printf("v:duration[sec]  %.3f\n\n",
-               1.0 * vi.num_frames * vi.fps_numerator / vi.fps_denominator);
+               1.0 * vi.num_frames * vi.fps_denominator / vi.fps_numerator);
     }
 
     if (vi.HasAudio() && act_info) {

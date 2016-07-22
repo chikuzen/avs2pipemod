@@ -28,7 +28,7 @@
 #include <windows.h>
 #include <avisynth.h>
 
-#define A2PM_VERSION "1.0.1"
+#define A2PM_VERSION "1.0.2"
 
 
 enum action_t {
