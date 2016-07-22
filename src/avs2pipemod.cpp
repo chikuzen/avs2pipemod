@@ -43,15 +43,17 @@ static inline int64_t get_current_time(void)
 
 
 Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in) :
-    dll(d), env(e), clip(c), input(in)
+    dll(d), env(e), clip(c), input(in), versionString("unknown")
 {
     vi = clip->GetVideoInfo();
 
-    AVSValue v = env->Invoke("VersionNumber", AVSValue(nullptr, 0));
-    validate(!v.IsFloat(), "VersionNumber did not return a float value\n");
+    auto v = env->Invoke("VersionNumber", AVSValue(nullptr, 0));
+    validate(!v.IsFloat(), "VersionNumber did not return a float value.\n");
     version = static_cast<float>(v.AsFloat());
 
-    isPlusMT = env->FunctionExists("SetFilterMTMode");
+    v = env->Invoke("VersionString", AVSValue(nullptr, 0));
+    validate(!v.IsString(), "VersionString did not return string.\n");
+    versionString = v.AsString();
 
     sampleSize = vi.BytesFromPixels(1);
     if (vi.IsRGB32()) sampleSize /= 4;
@@ -95,9 +97,8 @@ void Avs2PipeMod::trim(int* args)
 
 void Avs2PipeMod::info(bool act_info)
 {
-    printf("avisynth_version %.3f%s\n"
-           "script_name      %s\n\n",
-           version, isPlusMT ? "(PlusMT)" : "", input);
+    printf("\navisynth_version %.3f / %s\n", version, versionString);
+    printf("script_name      %s\n\n", input);
 
     if (vi.HasVideo()) {
         printf("v:width          %d\n", vi.width);
@@ -109,8 +110,7 @@ void Avs2PipeMod::info(bool act_info)
                vi.IsTFF() ? "assumed top field first" : "not specified");
         printf("v:pixel_type     %s\n", get_string_info(vi.pixel_type));
         printf("v:bit_depth      %d\n", sampleSize * 8);
-        printf("v:fps            %u/%u\n",
-               vi.fps_numerator, vi.fps_denominator);
+        printf("v:fps            %u/%u\n", vi.fps_numerator, vi.fps_denominator);
         printf("v:frames         %d\n", vi.num_frames);
         printf("v:duration[sec]  %.3f\n\n",
                1.0 * vi.num_frames * vi.fps_numerator / vi.fps_denominator);

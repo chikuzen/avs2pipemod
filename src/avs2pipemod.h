@@ -81,9 +81,9 @@ class Avs2PipeMod {
     PClip clip;
     VideoInfo vi;
     float version;
+    const char* versionString;
     const char* input;
     int sampleSize; //bytes
-    bool isPlusMT;
 
     void invokeFilter(const char* filter, AVSValue args, const char** names=nullptr);
     void trim(int* args);
