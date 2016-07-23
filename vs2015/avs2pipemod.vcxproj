@@ -108,6 +108,7 @@
       <StringPooling>true</StringPooling>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
       <TargetMachine>MachineX86</TargetMachine>
@@ -148,6 +149,9 @@
     <ClInclude Include="..\src\getopt.h" />
     <ClInclude Include="..\src\utils.h" />
     <ClInclude Include="..\src\wave.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\src\avs2pipemod.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
