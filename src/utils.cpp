@@ -75,8 +75,8 @@ const char* get_string_info(int pix_type)
     case VideoInfo::CS_YUV422P16: return "YUV422P16";
     case VideoInfo::CS_YUV420PS:  return "YUV420PS";
     case VideoInfo::CS_YUV420P16: return "YUV420P16";
-    case VideoInfo::CS_Y32:       return "YUV420PS";
-    case VideoInfo::CS_Y16:       return "YUV420P16";
+    case VideoInfo::CS_Y32:       return "Y32";
+    case VideoInfo::CS_Y16:       return "Y16";
     default: return "unknown";
     }
 }
