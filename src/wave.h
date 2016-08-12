@@ -25,7 +25,7 @@
 #ifndef WAVE_H
 #define WAVE_H
 
-#include <stdint.h>
+#include <cstdint>
 
 
 

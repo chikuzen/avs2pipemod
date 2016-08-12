@@ -256,7 +256,7 @@ int main(int argc, char** argv)
         Params params = {};
         parse_opts(argc, argv, params);
 
-        std::shared_ptr<Avs2PipeMod> a2pm(
+        std::unique_ptr<Avs2PipeMod> a2pm(
             Avs2PipeMod::create(argv[argc - 1], params.dll_path));
 
         switch(params.action) {

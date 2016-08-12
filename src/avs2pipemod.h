@@ -88,10 +88,8 @@ class Avs2PipeMod {
     void invokeFilter(const char* filter, AVSValue args, const char** names=nullptr);
     void trim(int* args);
     void prepareY4MOut(Params& params);
-    int writeFrames(bool is_y4mout);
-
-    template <typename T, bool IS_PLANAR>
-    int writePixValuesAsText();
+    template <bool y4mout> int writeFrames(Params& params);
+    template <typename T, bool IS_PLANAR> int writePixValuesAsText();
 
 public:
     Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input);

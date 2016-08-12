@@ -37,7 +37,7 @@ static inline int64_t get_current_time(void)
 {
     timeb tb;
     ftime(&tb);
-    return ((int64_t)tb.time * 1000 + (int64_t)tb.millitm) * 1000;
+    return static_cast<int64_t>(tb.time) * 1000 + static_cast<int64_t>(tb.millitm) * 1000;
 }
 
 
@@ -123,7 +123,7 @@ void Avs2PipeMod::info(bool act_info)
                vi.sample_type == SAMPLE_FLOAT ? "float" : "integer");
         printf("a:bit_depth      %d\n", vi.BytesPerChannelSample() * 8);
         printf("a:channels       %d\n", vi.AudioChannels());
-        printf("a:samples        %lld\n", vi.num_audio_samples);
+        printf("a:samples        %" PRIi64 "\n", vi.num_audio_samples);
         printf("a:duration[sec]  %.3f\n\n",
                1.0 * vi.num_audio_samples / vi.audio_samples_per_second);
     }
@@ -230,7 +230,7 @@ void Avs2PipeMod::outAudio(Params& params)
         step = fwrite(data, size, count, stdout);
         if (step != count) break;
         wrote += step;
-        a2pm_log(LOG_REPEAT, "wrote %.3f seconds [%I64u%%]",
+        a2pm_log(LOG_REPEAT, "wrote %.3f seconds [%" PRIu64 "%%]",
                  1.0 * wrote / count, (100 * wrote) / target);
     }
 
@@ -279,7 +279,8 @@ void Avs2PipeMod::prepareY4MOut(Params& params)
 }
 
 
-int Avs2PipeMod::writeFrames(bool is_y4mout)
+template <bool Y4MOUT>
+int Avs2PipeMod::writeFrames(Params& params)
 {
     const int planes[] = { 0, PLANAR_U, PLANAR_V };
     const int num_planes = (vi.pixel_type & VideoInfo::CS_INTERLEAVED) ? 1 : 3;
@@ -287,10 +288,17 @@ int Avs2PipeMod::writeFrames(bool is_y4mout)
     auto b = Buffer(buffsize, 64);
     uint8_t* buff = reinterpret_cast<uint8_t*>(b.data());
 
+    if (Y4MOUT) {
+      fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
+        vi.width, vi.height, vi.fps_numerator, vi.fps_denominator,
+        params.frame_type, params.sar[0], params.sar[1],
+        get_string_y4mheader(vi.pixel_type, params.yuv_depth));
+    }
+
     int wrote = 0;
     while (wrote < vi.num_frames) {
         auto frame = clip->GetFrame(wrote, env);
-        if (is_y4mout) {
+        if (Y4MOUT) {
             puts("FRAME");
         }
         for (int p = 0; p < num_planes; ++p) {
@@ -355,14 +363,7 @@ void Avs2PipeMod::outVideo(Params& params)
 
     int64_t elapsed = get_current_time();
 
-    if (y4mout) {
-        fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
-                vi.width, vi.height, vi.fps_numerator, vi.fps_denominator,
-                params.frame_type, params.sar[0], params.sar[1],
-                get_string_y4mheader(vi.pixel_type, params.yuv_depth));
-    }
-
-    int wrote = writeFrames(y4mout);
+    int wrote = y4mout ? writeFrames<true>(params) : writeFrames<false>(params);
 
     elapsed = get_current_time() - elapsed;
 
