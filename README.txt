@@ -21,7 +21,7 @@ Usage
 	Then help will be displayed.
 
 Requirement
-	- Avisynth2.6.0/Avisynth+r1576 or later.
+	- Avisynth2.6.0final / Avisynth+MT r1706 or later.
 	- Windows Vista sp2 or later.
 	- Microsoft Visual C++ 2015 Redistributable Update 3
 
