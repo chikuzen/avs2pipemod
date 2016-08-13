@@ -55,10 +55,9 @@ Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in) :
     validate(!v.IsString(), "VersionString did not return string.\n");
     versionString = v.AsString();
 
-    sampleSize = vi.BytesFromPixels(1);
-    if (vi.IsRGB32()) sampleSize /= 4;
-    if (vi.IsRGB24()) sampleSize /= 3;
-    if (vi.IsYUY2()) sampleSize /= 2;
+    sampleBits = get_sample_bits(vi.pixel_type);
+
+    numPlanes = get_num_planes(vi.pixel_type);
 }
 
 
@@ -102,18 +101,19 @@ void Avs2PipeMod::info(bool act_info)
     printf("script_name      %s\n\n", input);
 
     if (vi.HasVideo()) {
-        printf("v:width          %d\n", vi.width);
-        printf("v:height         %d\n", vi.height);
-        printf("v:image_type     %s\n",
+        printf("v:width            %d\n", vi.width);
+        printf("v:height           %d\n", vi.height);
+        printf("v:image_type       %s\n",
                vi.IsFieldBased() ? "fieldbased" : "framebased");
-        printf("v:field_order    %s\n",
+        printf("v:field_order      %s\n",
                vi.IsBFF() ? "assumed bottom field first" :
                vi.IsTFF() ? "assumed top field first" : "not specified");
-        printf("v:pixel_type     %s\n", get_string_info(vi.pixel_type));
-        printf("v:bit_depth      %d\n", sampleSize * 8);
-        printf("v:fps            %u/%u\n", vi.fps_numerator, vi.fps_denominator);
-        printf("v:frames         %d\n", vi.num_frames);
-        printf("v:duration[sec]  %.3f\n\n",
+        printf("v:pixel_type       %s\n", get_string_info(vi.pixel_type));
+        printf("v:bit_depth        %d\n", sampleBits);
+        printf("v:number of planes %d\n", numPlanes);
+        printf("v:fps              %u/%u\n", vi.fps_numerator, vi.fps_denominator);
+        printf("v:frames           %d\n", vi.num_frames);
+        printf("v:duration[sec]    %.3f\n\n",
                1.0 * vi.num_frames * vi.fps_denominator / vi.fps_numerator);
     }
 
@@ -264,7 +264,7 @@ void Avs2PipeMod::prepareY4MOut(Params& params)
     if (vi.IsYUY2()) {
         invokeFilter("ConvertToYV16", clip);
     }
-    if (vi.IsRGB()) {
+    if (vi.IsRGB24() || vi.IsRGB32()) {
         const char* names[] = {nullptr, "interlaced", "matrix"};
         AVSValue args[] = {
             clip,
@@ -273,26 +273,36 @@ void Avs2PipeMod::prepareY4MOut(Params& params)
         };
         invokeFilter("ConvertToYV24", AVSValue(args, 3), names);
     }
-    if (sampleSize == 4) {
+    if (vi.IsRGB48() || vi.IsRGB64() || vi.IsPlanarRGB()) {
+        throw std::runtime_error("unsupported format.");
+    }
+    if (sampleBits == 32 || (vi.IsY() && (sampleBits >= 10 && sampleBits < 16))) {
         invokeFilter("ConvertTo16bit", clip);
     }
+
+
 }
 
 
 template <bool Y4MOUT>
 int Avs2PipeMod::writeFrames(Params& params)
 {
-    const int planes[] = { 0, PLANAR_U, PLANAR_V };
-    const int num_planes = (vi.pixel_type & VideoInfo::CS_INTERLEAVED) ? 1 : 3;
-    const size_t buffsize = vi.width * vi.height * vi.BytesFromPixels(1);
+    const int planes[] = {
+        0,
+        vi.IsYUV() ? PLANAR_U : PLANAR_B,
+        vi.IsYUV() ? PLANAR_V : PLANAR_R,
+        PLANAR_A
+    };
+
+    const size_t buffsize = vi.BytesFromPixels(vi.width * vi.height);
     auto b = Buffer(buffsize, 64);
     uint8_t* buff = reinterpret_cast<uint8_t*>(b.data());
 
     if (Y4MOUT) {
-      fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
-        vi.width, vi.height, vi.fps_numerator, vi.fps_denominator,
-        params.frame_type, params.sar[0], params.sar[1],
-        get_string_y4mheader(vi.pixel_type, params.yuv_depth));
+        fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
+                vi.width, vi.height, vi.fps_numerator, vi.fps_denominator,
+                params.frame_type, params.sar[0], params.sar[1],
+                get_string_y4mheader(vi.pixel_type));
     }
 
     int wrote = 0;
@@ -301,7 +311,7 @@ int Avs2PipeMod::writeFrames(Params& params)
         if (Y4MOUT) {
             puts("FRAME");
         }
-        for (int p = 0; p < num_planes; ++p) {
+        for (int p = 0; p < numPlanes; ++p) {
             int plane = planes[p];
             const uint8_t* srcp = frame->GetReadPtr(plane);
             int rowsize = frame->GetRowSize(plane);
@@ -377,26 +387,34 @@ void Avs2PipeMod::outVideo(Params& params)
 }
 
 
-template <typename T, bool IS_INTERLEAVED>
+template <typename T>
 int Avs2PipeMod::writePixValuesAsText()
 {
-    const int planes[] = { 0, PLANAR_U, PLANAR_V };
-    constexpr int NUM_PLANES = IS_INTERLEAVED ? 1 : 3;
+    const int planes[] = {
+        0,
+        vi.IsYUV() ? PLANAR_U : PLANAR_B,
+        vi.IsYUV() ? PLANAR_V : PLANAR_R,
+        PLANAR_A
+    };
 
     int wrote = 0;
     while (wrote < vi.num_frames) {
         auto frame = clip->GetFrame(wrote, env);
         fprintf(stdout, "frame %d\n", wrote);
 
-        for (int p = 0; p < NUM_PLANES; ++p) {
+        for (int p = 0; p < numPlanes; ++p) {
             int plane = planes[p];
             const uint8_t* srcp = frame->GetReadPtr(plane);
             int width = frame->GetRowSize(plane) / sizeof(T);
             int height = frame->GetHeight(plane);
             int pitch = frame->GetPitch(plane);
 
-            if (!IS_INTERLEAVED) {
-                puts(p == 0 ? "Y-plane" : p == 1 ? "U-plane" : "V-plane");
+            if (numPlanes > 1) {
+                if (vi.IsYUV()) {
+                    puts(p == 0 ? "Y-plane" : p == 1 ? "U-plane" : p == 2 ? "V-plane" : "Alpha");
+                } else {
+                    puts(p == 0 ? "G-plane" : p == 1 ? "B-plane" : p == 2 ? "R-plane" : "Alpha");
+                }
             }
 
             for (int y = 0; y < height; ++y) {
@@ -433,18 +451,12 @@ void Avs2PipeMod::dumpPixValues(Params& params)
     puts("\n");
 
     int wrote = 0;
-    if (vi.IsRGB() || vi.IsYUY2() || vi.IsY8()) {
-        wrote = writePixValuesAsText<uint8_t, true>();
-    } else if (vi.IsColorSpace(VideoInfo::CS_Y16)) {
-        wrote = writePixValuesAsText<uint16_t, true>();
-    } else if (vi.IsColorSpace(VideoInfo::CS_Y32)) {
-        wrote = writePixValuesAsText<float, true>();
-    } else if (sampleSize == 1) {
-        wrote = writePixValuesAsText<uint8_t, false>();
-    } else if (sampleSize == 2 ) {
-        wrote = writePixValuesAsText<uint16_t, false>();
+    if (sampleBits == 8) {
+        wrote = writePixValuesAsText<uint8_t>();
+    } else if (sampleBits != 32) {
+        wrote = writePixValuesAsText<uint16_t>();
     } else {
-        wrote = writePixValuesAsText<float, false>();
+        wrote = writePixValuesAsText<float>();
     }
 
     a2pm_log(LOG_INFO, "finished, wrote %d frames [%d%%].\n",

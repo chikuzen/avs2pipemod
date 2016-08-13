@@ -28,7 +28,7 @@
 #include <windows.h>
 #include <avisynth.h>
 
-#define A2PM_VERSION "1.0.3"
+#define A2PM_VERSION "1.1.0"
 
 
 enum action_t {
@@ -83,13 +83,14 @@ class Avs2PipeMod {
     float version;
     const char* versionString;
     const char* input;
-    int sampleSize; //bytes
+    int sampleBits;
+    int numPlanes;
 
     void invokeFilter(const char* filter, AVSValue args, const char** names=nullptr);
     void trim(int* args);
     void prepareY4MOut(Params& params);
     template <bool y4mout> int writeFrames(Params& params);
-    template <typename T, bool IS_PLANAR> int writePixValuesAsText();
+    template <typename T> int writePixValuesAsText();
 
 public:
     Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input);
