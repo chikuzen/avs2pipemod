@@ -9,6 +9,7 @@ Differences with original
 * New option 'benchmark'.
 * New option 'trim'.
 * New option 'dumptxt'
+* New option 'filters'
 * 'y4mp', 'y4mt', 'y4mb' and 'rawvideo' options instead of 'video'.
 * FieldBased input will be corrected to framebased on yuv4mpeg2 output modes.
 * Colorspace conversion that takes colormatrix and interlace into consideration.
