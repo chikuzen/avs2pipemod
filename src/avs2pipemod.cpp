@@ -37,7 +37,7 @@ static inline int64_t get_current_time(void)
 {
     timeb tb;
     ftime(&tb);
-    return static_cast<int64_t>(tb.time) * 1000 + static_cast<int64_t>(tb.millitm) * 1000;
+    return (static_cast<int64_t>(tb.time) * 1000 + static_cast<int64_t>(tb.millitm)) * 1000;
 }
 
 
