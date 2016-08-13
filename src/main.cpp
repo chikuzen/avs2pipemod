@@ -81,7 +81,9 @@ static void usage()
 #endif
 "   -info  - output information about aviscript clip.\n"
 "\n"
-"   -benchmark - do benchmark aviscript, and output results to stdout.\n"
+"   -filters - output external plugin filters/functions list to stdout.\n"
+"\n"
+"   -benchmark - do benchmark avs script, and output results to stdout.\n"
 "\n"
 "   -dumptxt - dump pixel values as tab separated text to stdout.\n"
 "\n"
@@ -146,6 +148,7 @@ static void parse_opts(int argc, char **argv, Params& p)
 #endif
         { "dumpyuv", no_argument, nullptr, 'd' }, /* for backward compatibility */
         { "dumptxt", no_argument, nullptr, 'd' },
+        { "filters", no_argument, nullptr, 'f' },
         { "trim", required_argument, nullptr, 'T' },
         { "dll", required_argument, nullptr, 'D' },
         { "y4mbits", required_argument, nullptr, 'Y'},
@@ -187,6 +190,9 @@ static void parse_opts(int argc, char **argv, Params& p)
             break;
         case 'i':
             p.action = A2PM_ACT_INFO;
+            break;
+        case 'f':
+            p.action = A2PM_ACT_FILTERS;
             break;
         case 'B':
             p.action = A2PM_ACT_BENCHMARK;
@@ -278,6 +284,9 @@ int main(int argc, char** argv)
 #endif
         case A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT:
             a2pm->dumpPixValues(params);
+            break;
+        case A2PM_ACT_FILTERS:
+            a2pm->dumpPluginFiltersList(params);
             break;
         default:
             break;

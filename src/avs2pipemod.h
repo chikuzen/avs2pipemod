@@ -37,6 +37,7 @@ enum action_t {
     A2PM_ACT_AUDIO,
     A2PM_ACT_VIDEO,
     A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT,
+    A2PM_ACT_FILTERS,
 #if 0
     A2PM_ACT_X264BD,
     A2PM_ACT_X264RAW,
@@ -100,6 +101,7 @@ public:
     void outAudio(Params& params);
     void outVideo(Params& params);
     void dumpPixValues(Params& params);
+    void dumpPluginFiltersList(Params& params);
 #if 0
     void x264bd(Params& params);
     void x264raw(Params& params);

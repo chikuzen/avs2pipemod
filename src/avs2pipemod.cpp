@@ -467,6 +467,25 @@ void Avs2PipeMod::dumpPixValues(Params& params)
 }
 
 
+void Avs2PipeMod::dumpPluginFiltersList(Params& params)
+{
+    printf("\navisynth_version %.3f / %s\n", version, versionString);
+    printf("script_name      %s\n\n", input);
+
+    try {
+        auto filters = std::string(env->GetVar("$PluginFunctions$").AsString(""));
+        size_t pos = filters.find(" ");
+        while (pos != std::string::npos) {
+            filters.replace(pos, 1, "\n");
+            pos = filters.find(" ");
+        }
+        printf("%s\n", filters.c_str());
+    } catch (...) {
+        throw std::runtime_error("plugin funtions/filters not found.");
+    }
+}
+
+
 Avs2PipeMod* Avs2PipeMod::create(const char* input, const char* dll_path)
 {
     typedef ise_t* (__stdcall *cse_t)(int);
