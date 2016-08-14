@@ -275,10 +275,10 @@ int get_num_planes(int pixel_type)
     if (pixel_type & VideoInfo::CS_INTERLEAVED) {
         return 1;
     }
-    if (pixel_type & (VideoInfo::CS_YUVA | VideoInfo::CS_RGBA_TYPE)) {
-        return 4;
+    if (pixel_type & VideoInfo::CS_BGR) {
+        return (pixel_type & VideoInfo::CS_RGBA_TYPE) ? 4 : 3;
     }
-    return 3;
+    return (pixel_type & VideoInfo::CS_YUVA) ? 4 : 3;
 }
 
 #if 0

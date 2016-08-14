@@ -147,7 +147,7 @@
   <ItemGroup>
     <ClInclude Include="..\src\avs2pipemod.h" />
     <ClInclude Include="..\src\getopt.h" />
-    <ClInclude Include="..\src\resource4.h" />
+    <ClInclude Include="..\src\resource.h" />
     <ClInclude Include="..\src\utils.h" />
     <ClInclude Include="..\src\wave.h" />
   </ItemGroup>
