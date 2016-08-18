@@ -213,7 +213,7 @@ void Avs2PipeMod::outAudio(Params& params)
     auto buff = Buffer(size * count);
     void* data = buff.data();
 
-    a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %zu channel audio.\n",
+    a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %d channel audio.\n",
              1.0 * target / count, count, vi.nchannels);
 
     int64_t elapsed = get_current_time();
