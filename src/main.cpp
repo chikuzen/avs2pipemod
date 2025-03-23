@@ -252,7 +252,7 @@ static void parse_opts(int argc, char **argv, Params& p)
 
 int main(int argc, char** argv)
 {
-    if (argc < 3) {
+    if (argc < 2) {
         usage();
         return -1;
     }
