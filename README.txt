@@ -1,5 +1,5 @@
 avs2pipemod is a modified version of avs2pipe basically only for my purpose.
-Thanks to Chris Beswick who releases avs2pipe under GPL.
+Thanks to Chris Beswick who released avs2pipe under GPL 3.
 
 source code : https://github.com/chikuzen/avs2pipemod
 
@@ -21,9 +21,9 @@ Usage
 	Execute avs2pipemod.exe without any options.
 	Then help will be displayed.
 
-Requirement
-	- Avisynth2.6.0final / Avisynth+MT r1706 or later.
-	- Windows Vista sp2 or later.
+Requirements:
+	- Avisynth2.6.0final / Avisynth+MT r1706 / Avisynth+ or later.
+	- Windows Vista SP2 or later.
 	- Microsoft Visual C++ 2015 Redistributable Update 3
 
 
