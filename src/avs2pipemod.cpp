@@ -362,9 +362,10 @@ void Avs2PipeMod::outVideo(Params& params)
         const char* type = params.frame_type == 'p' ? "progressive" :
                            params.frame_type == 't' ? "tff" : "bff";
         snprintf(msg, 256,
-                 "writing %d frames of %d/%d fps, %dx%d,\n"
+                 "writing %d frames of %u/%u fps, %dx%d,\n"
                  "%18s sar %d:%d, %s %s video.\n",
-                 vi.num_frames, vi.fps_numerator, vi.fps_denominator, vi.width,
+                 vi.num_frames, vi.fps_numerator, vi.fps_denominator,
+            vi.width,
                  vi.height, "", params.sar[0], params.sar[1],
                  get_string_video_out(vi.pixel_type), type);
     } else {
