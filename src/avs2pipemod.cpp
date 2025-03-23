@@ -1,3 +1,7 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 /*
 * Copyright (C) 2012-2016 Oka Motofumi <chikuzen.mo at gmail dot com>
 *
@@ -474,10 +478,10 @@ void Avs2PipeMod::dumpPluginFiltersList(Params& params)
 
     try {
         auto filters = std::string(env->GetVar("$PluginFunctions$").AsString(""));
-        size_t pos = filters.find(" ");
+        size_t pos = filters.find(' ');
         while (pos != std::string::npos) {
             filters.replace(pos, 1, "\n");
-            pos = filters.find(" ");
+            pos = filters.find(' ');
         }
         printf("%s\n", filters.c_str());
     } catch (...) {
