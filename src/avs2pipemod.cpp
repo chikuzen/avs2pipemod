@@ -66,8 +66,9 @@ Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in) :
 
 
 Avs2PipeMod::~Avs2PipeMod()
-{
-    clip.~PClip();
+{    
+    //clip.~PClip();//manual destructor call: 
+    clip = nullptr;  // Force destruction of clip while the environment and DLL are still valid
     AVS_linkage = nullptr;
     env->DeleteScriptEnvironment();
     FreeLibrary(dll);
