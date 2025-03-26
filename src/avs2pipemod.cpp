@@ -131,7 +131,8 @@ void Avs2PipeMod::info(bool act_info)
         printf("a:samples        %" PRIi64 "\n", vi.num_audio_samples);
         printf("a:duration[sec]  %.3f\n",
                1.0 * vi.num_audio_samples / vi.audio_samples_per_second);
-        printf("a:channelmask    %d\n\n", AvsVersion::AVISYNTH_INTERFACE_VERSION >= 10 ? vi.GetChannelMask() : 0);
+        printf("a:channelmask    %u\n\n", 
+            AvsVersion::AVISYNTH_INTERFACE_VERSION >= 10 ? vi.GetChannelMask() : 0U);
     }
 }
 
