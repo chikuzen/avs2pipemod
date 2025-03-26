@@ -52,9 +52,6 @@ void a2pm_log(int level, const char *message, ...)
 {
     va_list args;
     fprintf(stderr,
-        level == LOG_INFO ? "avs2pipemod[info]: " :
-        level == LOG_REPEAT ? "\ravs2pipemod[info]: " :
-        level == LOG_WARNING ? "avs2pipemod[warning]: " : "");
         level == LOG_INFO ? "avs2pipemod [info]: " :
         level == LOG_REPEAT ? "\ravs2pipemod [info]: " :
         level == LOG_WARNING ? "avs2pipemod [warning]: " : "");
