@@ -68,6 +68,7 @@ struct wave_args_t {
     int sample_rate;
     int byte_depth;
     int64_t samples;
+    unsigned int channelmask;
 };
 
 

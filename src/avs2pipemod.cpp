@@ -129,8 +129,9 @@ void Avs2PipeMod::info(bool act_info)
         printf("a:bit_depth      %d\n", vi.BytesPerChannelSample() * 8);
         printf("a:channels       %d\n", vi.AudioChannels());
         printf("a:samples        %" PRIi64 "\n", vi.num_audio_samples);
-        printf("a:duration[sec]  %.3f\n\n",
+        printf("a:duration[sec]  %.3f\n",
                1.0 * vi.num_audio_samples / vi.audio_samples_per_second);
+        printf("a:channelmask    %d\n\n", AvsVersion::AVISYNTH_INTERFACE_VERSION >= 10 ? vi.GetChannelMask() : 0);
     }
 }
 
@@ -183,8 +184,11 @@ static void write_audio_file_header(Params& pr, const VideoInfo& vi)
 {
     WaveFormatType format = vi.sample_type == SAMPLE_FLOAT ?
         WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
+
+    pr.chmask = AvsVersion::AVISYNTH_INTERFACE_VERSION >= 10 ? vi.GetChannelMask() : 0;
+
     wave_args_t args = {format, vi.nchannels, vi.audio_samples_per_second,
-        vi.BytesPerChannelSample(), vi.num_audio_samples};
+        vi.BytesPerChannelSample(), vi.num_audio_samples, pr.chmask};
 
     if (pr.format_type == FMT_WAVEFORMATEXTENSIBLE) {
         auto header = WaveRiffExtHeader(args);
@@ -217,9 +221,12 @@ void Avs2PipeMod::outAudio(Params& params)
     uint64_t target = vi.num_audio_samples;
     auto buff = Buffer(size * count);
     void* data = buff.data();
+    params.chmask = AvsVersion::AVISYNTH_INTERFACE_VERSION >= 10 ? vi.GetChannelMask() : 0;
 
-    a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %d channel audio.\n",
-             1.0 * target / count, count, vi.nchannels);
+    vi.nchannels > 1 ? a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %d channels, %d Bits [channelmask=%d] audio stream.\n",
+        1.0 * target / count, count, vi.nchannels, vi.BytesPerChannelSample() * 8, params.chmask) :
+        a2pm_log(LOG_INFO, "writing %.3f seconds of %zu Hz, %d channel, %d Bits [channelmask=%d] audio stream.\n",
+            1.0 * target / count, count, vi.nchannels, vi.BytesPerChannelSample() * 8, params.chmask);
 
     int64_t elapsed = get_current_time();
 
@@ -242,6 +249,8 @@ void Avs2PipeMod::outAudio(Params& params)
     fflush(stdout);
 
     elapsed = get_current_time() - elapsed;
+
+    fprintf(stderr, "%s", "\n");
 
     a2pm_log(LOG_INFO, "total elapsed time is %.3f sec.\n",
              elapsed / 1000000.0);

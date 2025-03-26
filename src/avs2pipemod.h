@@ -31,7 +31,7 @@
 #include <windows.h>
 #include <avisynth.h>
 
-#define A2PM_VERSION "1.1.1"
+#define A2PM_VERSION "1.1.2"
 
 
 enum action_t {
@@ -74,6 +74,7 @@ struct Params {
     char* bit;
     int yuv_depth;
     char* dll_path;
+    unsigned int chmask;
 };
 
 

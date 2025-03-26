@@ -99,7 +99,7 @@ WaveRiffExtHeader::WaveRiffExtHeader(wave_args_t& a)
     format.ext_size = sizeof(valid_bits) + sizeof(channel_mask) + sizeof(sub_format);
     format.header.size += format.ext_size;
     valid_bits = a.byte_depth * 8;
-    channel_mask = get_channel_mask(a.channels);
+    channel_mask = a.channelmask > 0 ? a.channelmask : get_channel_mask(a.channels);
 
     WaveGuid sf = {
         a.format, 0x0000, 0x0010,
