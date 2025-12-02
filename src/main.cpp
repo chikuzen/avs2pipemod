@@ -130,13 +130,14 @@ static void usage()
 
 static void parse_opts(int argc, char **argv, Params& p)
 {
-    char short_opts[] = "a::Bb::c::C::de::ip::t::T:v::w::x::y::";
+    char short_opts[] = "a::Bb::c::C::de::ip::q::t::T:v::w::x::y::";
     struct option long_opts[] = {
         { "rawaudio", optional_argument, nullptr, 'a' },
         { "extwav", optional_argument, nullptr, 'e' },
         { "audio", optional_argument, nullptr, 'e' }, /* for backward compatibility */
         { "wav", optional_argument, nullptr, 'w' },
         { "y4mp", optional_argument, nullptr, 'p' },
+        { "y4mq", optional_argument, nullptr, 'q' },
         { "video", optional_argument, nullptr, 'p' }, /* for backward compatibility */
         { "y4mt", optional_argument, nullptr, 't' },
         { "y4mb", optional_argument, nullptr, 'b' },
@@ -173,9 +174,21 @@ static void parse_opts(int argc, char **argv, Params& p)
             p.format_type = parse == 'e' ? FMT_WAVEFORMATEXTENSIBLE :
                             parse == 'a' ? FMT_RAWAUDIO : FMT_WAVEFORMATEX;
             break;
+        case 'q':
+            p.yuv_depth = 10;
+            p.action = A2PM_ACT_VIDEO;
+            p.format_type = FMT_YUV4MPEG2;
+            p.frame_type = parse;
+            if (optarg) {
+                sscanf(optarg, "%d:%d", &p.sar[0], &p.sar[1]);
+                validate(p.sar[0] < 0 || p.sar[1] < 0,
+                    "invalid argument \"%s\".\n\n", optarg);
+            }
+            break;
         case 't':
         case 'b':
         case 'p':
+            p.yuv_depth = 10;
             p.action = A2PM_ACT_VIDEO;
             p.format_type = FMT_YUV4MPEG2;
             p.frame_type = parse;

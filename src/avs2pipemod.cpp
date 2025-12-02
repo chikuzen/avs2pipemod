@@ -371,6 +371,7 @@ void Avs2PipeMod::outVideo(Params& params)
     if (y4mout) {
         prepareY4MOut(params);
         const char* type = params.frame_type == 'p' ? "progressive" :
+                           params.frame_type == 'q' ? "progressive" :
                            params.frame_type == 't' ? "tff" : "bff";
         snprintf(msg, 256,
                  "writing %d frames of %u/%u fps, %dx%d,\n"
