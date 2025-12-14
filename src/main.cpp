@@ -22,6 +22,7 @@
 #include "avs2pipemod.h"
 #include "utils.h"
 #include "getopt.h"
+#include <format>
 
 
 
@@ -157,7 +158,7 @@ static void parse_opts(int argc, char **argv, Params& p)
 
     int index = 0;
     int parse = 0;
-    p.action = A2PM_ACT_NOTHING;
+    int ret;
 
     while ((parse = getopt_long_only(argc, argv, short_opts, long_opts, &index)) != -1) {
         switch(parse) {
@@ -177,9 +178,9 @@ static void parse_opts(int argc, char **argv, Params& p)
             p.format_type = FMT_YUV4MPEG2;
             p.frame_type = parse;
             if (optarg) {
-                sscanf(optarg, "%d:%d", &p.sar[0], &p.sar[1]);
-                validate(p.sar[0] < 0 || p.sar[1] < 0,
-                         "invalid argument \"%s\".\n\n", optarg);
+                ret = sscanf(optarg, "%d:%d", &p.sarnum, &p.sarden);
+                validate(p.sarnum < 0 || p.sarden < 0,
+                         std::format("invalid argument \"{}\".\n\n", optarg));
             }
             break;
         case 'v':
@@ -228,13 +229,13 @@ static void parse_opts(int argc, char **argv, Params& p)
             p.action = A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT;
             break;
         case 'T':
-            sscanf(optarg, "%d,%d", &p.trim[0], &p.trim[1]);
+            ret = sscanf(optarg, "%d,%d", &p.trimstart, &p.trimend);
             break;
         case 'D':
             p.dll_path = optarg;
             break;
         case 'Y':
-            sscanf(optarg, "%d", &p.yuv_depth);
+            ret = sscanf(optarg, "%d", &p.yuv_depth);
             validate(p.yuv_depth != 9 && p.yuv_depth != 10 && p.yuv_depth != 12
                         && p.yuv_depth != 14 && p.yuv_depth != 16,
                      "invalid bits specified.");
@@ -255,7 +256,7 @@ int main(int argc, char** argv)
     }
 
     try {
-        Params params = {};
+        auto params = Params();
         parse_opts(argc, argv, params);
 
         std::unique_ptr<Avs2PipeMod> a2pm(

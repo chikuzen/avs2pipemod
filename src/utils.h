@@ -25,8 +25,13 @@
 #include <cstdarg>
 #include <stdexcept>
 
-
-void validate(bool cond, const char* message, ...);
+template <typename T>
+static inline void validate(bool cond, T msg)
+{
+    if (cond) {
+        throw std::runtime_error(msg);
+    }
+}
 
 
 enum {

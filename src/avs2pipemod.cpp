@@ -25,6 +25,7 @@
 #include <fcntl.h>
 #include <cstdio>
 #include <cinttypes>
+#include <format>
 
 #include "avs2pipemod.h"
 #include "utils.h"
@@ -83,13 +84,13 @@ invokeFilter(const char* filter, AVSValue args, const char** names)
 }
 
 
-void Avs2PipeMod::trim(int* args)
+void Avs2PipeMod::trim(int start, int end)
 {
-    if (args[0] == 0 && args[1] == 0) {
+    if (start == 0 && end == 0) {
         return;
     }
 
-    AVSValue array[] = { clip, args[0], args[1] };
+    AVSValue array[] = { clip, start, end };
     invokeFilter("Trim", AVSValue(array, 3));
 }
 
@@ -118,14 +119,23 @@ void Avs2PipeMod::info(bool act_info)
     }
 
     if (vi.HasAudio() && act_info) {
+        unsigned cm = 0;
+        if (version > 3.72 && vi.IsChannelMaskKnown()) {
+            cm = vi.GetChannelMask();
+        }
+        std::string cmstr;
+        convert_channelmask_to_string(cm, cmstr);
+        if (cmstr == "") cmstr = "None";
         printf("a:sample_rate    %d\n", vi.audio_samples_per_second);
         printf("a:format         %s\n",
                vi.sample_type == SAMPLE_FLOAT ? "float" : "integer");
         printf("a:bit_depth      %d\n", vi.BytesPerChannelSample() * 8);
         printf("a:channels       %d\n", vi.AudioChannels());
         printf("a:samples        %" PRIi64 "\n", vi.num_audio_samples);
+        printf("a:channel_mask    %s\n", cmstr.c_str());
         printf("a:duration[sec]  %.3f\n\n",
                1.0 * vi.num_audio_samples / vi.audio_samples_per_second);
+
     }
 }
 
@@ -134,7 +144,7 @@ void Avs2PipeMod::benchmark(Params& params)
 {
     constexpr int FRAMES_PER_OUT = 50;
     validate(!vi.HasVideo(), "clip has no video.\n");
-    trim(params.trim);
+    trim(params.trimstart, params.trimend);
     info(false);
 
     int surplus = vi.num_frames % FRAMES_PER_OUT;
@@ -170,7 +180,7 @@ void Avs2PipeMod::benchmark(Params& params)
     fflush(stdout);
 
     validate(passed != vi.num_frames,
-             "only passed %d of %d frames.\n", passed, vi.num_frames);
+        std::format("only passed {} of {} frames.\n", passed, vi.num_frames));
 }
 
 
@@ -196,14 +206,14 @@ static void write_audio_file_header(Params& pr, const VideoInfo& vi)
 void Avs2PipeMod::outAudio(Params& params)
 {
     validate(!vi.HasAudio(), "clip has no audio.\n");
-    trim(params.trim);
+    trim(params.trimstart, params.trimend);
 
     validate(_setmode(_fileno(stdout), _O_BINARY) == -1,
              "cannot switch stdout to binary mode.\n");
 
     if (params.bit) {
-        auto filter = (std::string("ConvertAudioTo") + params.bit).c_str();
-        invokeFilter(filter, clip);
+        auto filter = std::string("ConvertAudioTo") + params.bit;
+        invokeFilter(filter.c_str(), clip);
     }
 
     size_t step = 0;
@@ -241,8 +251,8 @@ void Avs2PipeMod::outAudio(Params& params)
     a2pm_log(LOG_INFO, "total elapsed time is %.3f sec.\n",
              elapsed / 1000000.0);
 
-    validate(wrote != target, "only wrote %I64u of %I64u samples.\n",
-             wrote, target);
+    validate(wrote != target,
+        std::format("only wrote {} of {} samples.\n", wrote, target));
 }
 
 
@@ -294,7 +304,7 @@ int Avs2PipeMod::writeFrames(Params& params)
         PLANAR_A
     };
 
-    const size_t buffsize = vi.BytesFromPixels(vi.width * vi.height);
+    const size_t buffsize = vi.BitsPerPixel() * vi.width * vi.height / 8;
     auto b = Buffer(buffsize, 64);
     uint8_t* buff = reinterpret_cast<uint8_t*>(b.data());
 
@@ -342,7 +352,7 @@ finish:
 void Avs2PipeMod::outVideo(Params& params)
 {
     validate(!vi.HasVideo(), "clip has no video.\n");
-    trim(params.trim);
+    trim(params.trimstart, params.trimend);
 
     validate(_setmode(_fileno(stdout), _O_BINARY) == -1,
         "cannot switch stdout to binary mode.\n");
@@ -352,24 +362,22 @@ void Avs2PipeMod::outVideo(Params& params)
     }
 
     bool y4mout = params.format_type == FMT_YUV4MPEG2;
-    char msg[256];
+    std::string msg;
     if (y4mout) {
         prepareY4MOut(params);
         const char* type = params.frame_type == 'p' ? "progressive" :
                            params.frame_type == 't' ? "tff" : "bff";
-        snprintf(msg, 256,
-                 "writing %d frames of %d/%d fps, %dx%d,\n"
-                 "%18s sar %d:%d, %s %s video.\n",
-                 vi.num_frames, vi.fps_numerator, vi.fps_denominator, vi.width,
-                 vi.height, "", params.sar[0], params.sar[1],
-                 get_string_video_out(vi.pixel_type), type);
+        msg = std::format("writing {} frames of {}/{} fps, {}x{},\n",
+            vi.num_frames, vi.fps_numerator, vi.fps_denominator, vi.width,
+            vi.height);
+        msg += std::format("{:18} sar {}:{}, {} {} video.\n", "", params.sarnum,
+            params.sarden, get_string_video_out(vi.pixel_type), type);
     } else {
-        snprintf(msg, 256,
-                 "writing %d frames of %dx%d %s rawvideo.\n",
-                 vi.num_frames, vi.width, vi.height,
-                 get_string_video_out(vi.pixel_type));
+        msg = std::format("writing {} frames of {}x{} {} rawvideo.\n",
+             vi.num_frames, vi.width, vi.height,
+            get_string_video_out(vi.pixel_type));
     }
-    a2pm_log(LOG_INFO, msg);
+    a2pm_log(LOG_INFO, msg.c_str());
 
     int64_t elapsed = get_current_time();
 
@@ -382,8 +390,8 @@ void Avs2PipeMod::outVideo(Params& params)
     a2pm_log(LOG_INFO, "total elapsed time is %.3f sec.\n",
              elapsed / 1000000.0);
 
-    validate(wrote != vi.num_frames, "only wrote %d of %d frames.\n",
-             wrote, vi.num_frames);
+    validate(wrote != vi.num_frames,
+        std::format("only wrote {} of {} frames.\n", wrote, vi.num_frames));
 }
 
 
@@ -441,7 +449,7 @@ int Avs2PipeMod::writePixValuesAsText()
 void Avs2PipeMod::dumpPixValues(Params& params)
 {
     validate(!vi.HasVideo(), "clip has no video.\n");
-    trim(params.trim);
+    trim(params.trimstart, params.trimend);
 
     a2pm_log(LOG_INFO,
              "writing pixel values of %dx%dx%dframes to stdout as text.\n",
@@ -462,8 +470,8 @@ void Avs2PipeMod::dumpPixValues(Params& params)
     a2pm_log(LOG_INFO, "finished, wrote %d frames [%d%%].\n",
              wrote, 100 * wrote / vi.num_frames);
 
-    validate(wrote != vi.num_frames, "only wrote %d of %d frames.\n",
-             wrote, vi.num_frames);
+    validate(wrote != vi.num_frames, std::format("only wrote {} of {} frames.\n",
+             wrote, vi.num_frames));
 }
 
 
@@ -513,7 +521,7 @@ Avs2PipeMod* Avs2PipeMod::create(const char* input, const char* dll_path)
 
         return new Avs2PipeMod(dll, env, res.AsClip(), input);
 
-    } catch (std::runtime_error& e) {
+    } catch (std::exception& e) {
         AVS_linkage = nullptr;
         if (env) {
             env->DeleteScriptEnvironment();

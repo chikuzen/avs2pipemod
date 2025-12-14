@@ -21,17 +21,21 @@
 #ifndef AVS2PIPEMOD_H
 #define AVS2PIPEMOD_H
 
-
+#if defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #define NOGDI
 #include <windows.h>
 #include <avisynth.h>
+#else
+#include <avisynth/avisynth.h>
+#endif
 
 #define A2PM_VERSION "1.1.1"
 
 
 enum action_t {
+    A2PM_ACT_NOTHING = 0,
     A2PM_ACT_INFO,
     A2PM_ACT_BENCHMARK,
     A2PM_ACT_AUDIO,
@@ -42,10 +46,10 @@ enum action_t {
     A2PM_ACT_X264BD,
     A2PM_ACT_X264RAW,
 #endif
-    A2PM_ACT_NOTHING
 };
 
 enum format_type_t{
+    FMT_NOTHING = 0,
     FMT_RAWVIDEO,
     FMT_RAWVIDEO_VFLIP,
     FMT_YUV4MPEG2,
@@ -58,19 +62,29 @@ enum format_type_t{
     FMT_WITHOUT_TCFILE,
     FMT_WITH_TCFILE,
 #endif
-    FMT_NOTHING
 };
 
 
 struct Params {
     action_t action;
     format_type_t format_type;
-    int sar[2];
-    int trim[2];
+    int sarnum;
+    int sarden;
+    int trimstart;
+    int trimend;
     char frame_type;
     char* bit;
     int yuv_depth;
-    char* dll_path;
+    const char* dll_path;
+    int colorrange;
+    int colorprim;
+    int transfer;
+    int colormatrix;
+    int chromaloc;
+    Params() : action(A2PM_ACT_NOTHING), format_type(FMT_NOTHING), sarnum(0),
+        sarden(0), trimstart(0), trimend(0), frame_type(0), bit(nullptr),
+        yuv_depth(0), dll_path(nullptr), colorrange(-1), colorprim(2),
+        transfer(2), colormatrix(2), chromaloc(-1) { }
 };
 
 
@@ -88,7 +102,7 @@ class Avs2PipeMod {
     int numPlanes;
 
     void invokeFilter(const char* filter, AVSValue args, const char** names=nullptr);
-    void trim(int* args);
+    void trim(int start, int end);
     void prepareY4MOut(Params& params);
     template <bool y4mout> int writeFrames(Params& params);
     template <typename T> int writePixValuesAsText();

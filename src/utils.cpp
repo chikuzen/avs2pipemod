@@ -20,34 +20,25 @@
 
 
 #include <cstdio>
-#include <malloc.h>
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #define NOMINMAX
 #define NOGDI
 #include <windows.h>
 #include <avisynth.h>
+#include <avs/alignment.h>
+#else
+#include <avisynth/avisynth.h>
+#include <avisynth/avs/alignment.h>
+#endif
 #include "utils.h"
-
-void validate(bool cond, const char* msg, ...)
-{
-    if (!cond) return;
-
-    char buff[256];
-    va_list args;
-
-    va_start(args, msg);
-    vsnprintf(buff, 256, msg, args);
-    va_end(args);
-
-    throw std::runtime_error(buff);
-}
 
 
 void a2pm_log(int level, const char *message, ...)
 {
     va_list args;
-    fprintf(stderr, 
+    fprintf(stderr,
         level == LOG_INFO ? "avs2pipemod[info]: " :
         level == LOG_REPEAT ? "\ravs2pipemod[info]: " :
         level == LOG_WARNING ? "avs2pipemod[warning]: " : "");
@@ -328,7 +319,7 @@ x264raw_t get_string_x264raw(int pix_type)
 
 Buffer::Buffer(size_t size, size_t align)
 {
-    buff = _aligned_malloc(size, align);
+    buff = avs_malloc(size, align);
     if (!buff) {
         throw std::runtime_error("failed to allocate buffer.");
     }
@@ -336,7 +327,7 @@ Buffer::Buffer(size_t size, size_t align)
 
 Buffer::~Buffer()
 {
-    _aligned_free(buff);
+    avs_free(buff);
     buff = nullptr;
 }
 
