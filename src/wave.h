@@ -71,6 +71,7 @@ struct wave_args_t {
     int sample_rate;
     int byte_depth;
     int64_t samples;
+    uint32_t channel_mask;
 };
 
 
@@ -157,7 +158,7 @@ struct WaveRiffExtHeader {
     WaveGuid sub_format;
     WaveFactChunk   fact;
     WaveDataChunk   data;
-    WaveRiffExtHeader(wave_args_t& a, uint32_t cm);
+    WaveRiffExtHeader(wave_args_t& a);
 };
 
 

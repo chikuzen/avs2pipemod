@@ -26,9 +26,6 @@
 #include <cstdio>
 #include <cinttypes>
 #include <format>
-#include <array>
-#include <algorithm>
-#include <filesystem>
 
 #include "avs2pipemod.h"
 #include "utils.h"
@@ -45,28 +42,8 @@ static inline int64_t get_current_time(void)
 }
 
 
-static void set_frame_props(Params& p, PVideoFrame& vf, ise_t* env)
-{
-    auto map = env->getFramePropsRO(vf);
-    auto set_prop = [env, map](int& var, const char* key) {
-        if (env->propGetType(map, key) == 'i') {
-            var = env->propGetInt(map, key, 0, nullptr);
-        }
-    };
-
-    if (p.sarnum == 0) {
-        set_prop(p.sarnum, "_SARNum");
-        set_prop(p.sarnum, "_SARDen");
-    }
-    set_prop(p.colorrange, "_ColorRange");
-    set_prop(p.colorprim, "_Primaries");
-    set_prop(p.transfer, "_Transfer");
-    set_prop(p.colormatrix, "_Matrix");
-    set_prop(p.chromaloc, "_ChromaLocation");
-}
-
 Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in, Params& p) :
-    dll(d), env(e), clip(c), input(in), versionString("unknown")
+    dll(d), env(e), clip(c), input(in), versionString("unknown"), params(p)
 {
     vi = clip->GetVideoInfo();
 
@@ -80,6 +57,10 @@ Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in, Params& p
 
     sampleBits = get_sample_bits(vi.pixel_type);
     numPlanes = get_num_planes(vi.pixel_type);
+    params.channel_mask = 0;
+    if (version > 3.72 && vi.IsChannelMaskKnown()) {
+        params.channel_mask = vi.GetChannelMask();
+    }
 }
 
 
@@ -105,13 +86,13 @@ invokeFilter(const char* filter, AVSValue args, const char** names)
 }
 
 
-void Avs2PipeMod::trim(int start, int end)
+void Avs2PipeMod::trim()
 {
-    if (start == 0 && end == 0) {
+    if (params.trimstart == 0 && params.trimend == 0) {
         return;
     }
 
-    AVSValue array[] = { clip, start, end };
+    AVSValue array[] = { clip, params.trimstart, params.trimend };
     invokeFilter("Trim", AVSValue(array, 3));
 }
 
@@ -139,20 +120,17 @@ void Avs2PipeMod::info(bool act_info)
     }
 
     if (vi.HasAudio() && act_info) {
-        unsigned cm = 0;
-        if (version > 3.72 && vi.IsChannelMaskKnown()) {
-            cm = vi.GetChannelMask();
-        }
         std::string cmstr;
-        convert_channelmask_to_string(cm, cmstr);
+        convert_channelmask_to_string(params.channel_mask, cmstr);
         if (cmstr == "") cmstr = "None";
+
         printf("a:sample_rate    %d\n", vi.audio_samples_per_second);
         printf("a:format         %s\n",
                vi.sample_type == SAMPLE_FLOAT ? "float" : "integer");
         printf("a:bit_depth      %d\n", vi.BytesPerChannelSample() * 8);
         printf("a:channels       %d\n", vi.AudioChannels());
         printf("a:samples        %" PRIi64 "\n", vi.num_audio_samples);
-        printf("a:channel_mask    %s\n", cmstr.c_str());
+        printf("a:channel_mask   %s\n", cmstr.c_str());
         printf("a:duration[sec]  %.3f\n\n",
                1.0 * vi.num_audio_samples / vi.audio_samples_per_second);
 
@@ -160,11 +138,11 @@ void Avs2PipeMod::info(bool act_info)
 }
 
 
-void Avs2PipeMod::benchmark(Params& params)
+void Avs2PipeMod::benchmark()
 {
     constexpr int FRAMES_PER_OUT = 50;
     validate(!vi.HasVideo(), "clip has no video.\n");
-    trim(params.trimstart, params.trimend);
+    trim();
     info(false);
 
     int surplus = vi.num_frames % FRAMES_PER_OUT;
@@ -209,15 +187,17 @@ static void write_audio_file_header(Params& pr, const VideoInfo& vi,
 {
     WaveFormatType format = vi.sample_type == SAMPLE_FLOAT ?
         WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
-    wave_args_t args = {format, vi.nchannels, vi.audio_samples_per_second,
-        vi.BytesPerChannelSample(), vi.num_audio_samples};
+    wave_args_t args = {
+        format,
+        vi.nchannels,
+        vi.audio_samples_per_second,
+        vi.BytesPerChannelSample(),
+        vi.num_audio_samples,
+        pr.channel_mask,
+    };
 
     if (pr.format_type == FMT_WAVEFORMATEXTENSIBLE) {
-        uint32_t cm = 0;
-        if (version > 3.72 && vi.IsChannelMaskKnown()) {
-            cm = vi.GetChannelMask();
-        }
-        auto header = WaveRiffExtHeader(args, cm);
+        auto header = WaveRiffExtHeader(args);
         fwrite(&header, sizeof(header), 1, stdout);
         return;
     }
@@ -228,10 +208,10 @@ static void write_audio_file_header(Params& pr, const VideoInfo& vi,
 }
 
 
-void Avs2PipeMod::outAudio(Params& params)
+void Avs2PipeMod::outAudio()
 {
     validate(!vi.HasAudio(), "clip has no audio.\n");
-    trim(params.trimstart, params.trimend);
+    trim();
 
     validate(_setmode(_fileno(stdout), _O_BINARY) == -1,
              "cannot switch stdout to binary mode.\n");
@@ -254,6 +234,9 @@ void Avs2PipeMod::outAudio(Params& params)
     int64_t elapsed = get_current_time();
 
     if (params.format_type != FMT_RAWAUDIO) {
+        if (version > 3.72 && vi.IsChannelMaskKnown()) {
+            params.channel_mask = vi.GetChannelMask();
+        }
         write_audio_file_header(params, vi, version);
     }
 
@@ -281,7 +264,7 @@ void Avs2PipeMod::outAudio(Params& params)
 }
 
 
-void Avs2PipeMod::prepareY4MOut(Params& params)
+void Avs2PipeMod::prepareY4MOut()
 {
     if (vi.IsFieldBased()) {
         a2pm_log(LOG_WARNING,
@@ -317,8 +300,29 @@ void Avs2PipeMod::prepareY4MOut(Params& params)
 }
 
 
+static void set_frame_props(Params& p, PVideoFrame& vf, ise_t* env)
+{
+    auto map = env->getFramePropsRO(vf);
+    auto set_prop = [env, map](int& var, const char* key) {
+        if (env->propGetType(map, key) == 'i') {
+            var = env->propGetInt(map, key, 0, nullptr);
+        }
+        };
+
+    if (p.sarnum == 0) {
+        set_prop(p.sarnum, "_SARNum");
+        set_prop(p.sarnum, "_SARDen");
+    }
+    set_prop(p.colorrange, "_ColorRange");
+    set_prop(p.colorprim, "_Primaries");
+    set_prop(p.transfer, "_Transfer");
+    set_prop(p.colormatrix, "_Matrix");
+    set_prop(p.chromaloc, "_ChromaLocation");
+}
+
+
 template <bool Y4MOUT>
-int Avs2PipeMod::writeFrames(Params& params)
+int Avs2PipeMod::writeFrames()
 {
     const int planes[] = {
         0,
@@ -334,7 +338,7 @@ int Avs2PipeMod::writeFrames(Params& params)
     auto frame = clip->GetFrame(0, env);
     int wrote = 0;
 
-    if (Y4MOUT) {
+    if constexpr (Y4MOUT) {
         if (version >= 3.70) {
             set_frame_props(params, frame, env);
         }
@@ -355,7 +359,7 @@ int Avs2PipeMod::writeFrames(Params& params)
     }
 
     while (true) {
-        if (Y4MOUT) {
+        if constexpr (Y4MOUT) {
             puts("FRAME");
         }
         for (int p = 0; p < numPlanes; ++p) {
@@ -387,10 +391,10 @@ finish:
 }
 
 
-void Avs2PipeMod::outVideo(Params& params)
+void Avs2PipeMod::outVideo()
 {
     validate(!vi.HasVideo(), "clip has no video.\n");
-    trim(params.trimstart, params.trimend);
+    trim();
 
     validate(_setmode(_fileno(stdout), _O_BINARY) == -1,
         "cannot switch stdout to binary mode.\n");
@@ -402,7 +406,7 @@ void Avs2PipeMod::outVideo(Params& params)
     bool y4mout = params.format_type == FMT_YUV4MPEG2;
     std::string msg;
     if (y4mout) {
-        prepareY4MOut(params);
+        prepareY4MOut();
         const char* type = params.frame_type == 'p' ? "progressive" :
                            params.frame_type == 't' ? "tff" : "bff";
         msg = std::format("writing {} frames of {}/{} fps, {}x{},\n",
@@ -419,7 +423,7 @@ void Avs2PipeMod::outVideo(Params& params)
 
     int64_t elapsed = get_current_time();
 
-    int wrote = y4mout ? writeFrames<true>(params) : writeFrames<false>(params);
+    int wrote = y4mout ? writeFrames<true>() : writeFrames<false>();
 
     elapsed = get_current_time() - elapsed;
 
@@ -484,10 +488,10 @@ int Avs2PipeMod::writePixValuesAsText()
 }
 
 
-void Avs2PipeMod::dumpPixValues(Params& params)
+void Avs2PipeMod::dumpPixValues()
 {
     validate(!vi.HasVideo(), "clip has no video.\n");
-    trim(params.trimstart, params.trimend);
+    trim();
 
     a2pm_log(LOG_INFO,
              "writing pixel values of %dx%dx%dframes to stdout as text.\n",
@@ -513,7 +517,7 @@ void Avs2PipeMod::dumpPixValues(Params& params)
 }
 
 
-void Avs2PipeMod::dumpPluginFiltersList(Params& params)
+void Avs2PipeMod::dumpPluginFiltersList()
 {
     printf("\navisynth_version %.3f / %s\n", version, versionString);
     printf("script_name      %s\n\n", input);
@@ -562,11 +566,9 @@ Avs2PipeMod* Avs2PipeMod::create(const char* input, Params& p)
         AVS_linkage = nullptr;
         if (env) {
             env->DeleteScriptEnvironment();
-            env = nullptr;
         }
         if (dll) {
             FreeLibrary(dll);
-            dll = nullptr;
         }
         throw e;
     } catch (AvisynthError e) {

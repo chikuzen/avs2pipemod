@@ -75,6 +75,7 @@ struct Params {
     char* bit;
     int yuv_depth;
     const char* dll_path;
+    uint32_t channel_mask;
     int colorrange;
     int colorprim;
     int transfer;
@@ -82,8 +83,9 @@ struct Params {
     int chromaloc;
     Params() : action(A2PM_ACT_NOTHING), format_type(FMT_NOTHING), sarnum(0),
         sarden(0), trimstart(0), trimend(0), frame_type(0), bit(nullptr),
-        yuv_depth(0), dll_path(nullptr), colorrange(-1), colorprim(2),
-        transfer(2), colormatrix(2), chromaloc(-1) { }
+        yuv_depth(0), dll_path(nullptr), channel_mask(0),
+        colorrange(-1), colorprim(2), transfer(2), colormatrix(2),
+        chromaloc(-1) { }
 };
 
 
@@ -91,6 +93,7 @@ typedef IScriptEnvironment ise_t;
 
 class Avs2PipeMod {
     HMODULE dll;
+    Params& params;
     ise_t* env;
     PClip clip;
     VideoInfo vi;
@@ -101,25 +104,25 @@ class Avs2PipeMod {
     int numPlanes;
 
     void invokeFilter(const char* filter, AVSValue args, const char** names=nullptr);
-    void trim(int start, int end);
-    void prepareY4MOut(Params& params);
-    template <bool y4mout> int writeFrames(Params& params);
+    void trim();
+    void prepareY4MOut();
+    template <bool y4mout> int writeFrames();
     template <typename T> int writePixValuesAsText();
 
 public:
     Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input, Params& p);
     ~Avs2PipeMod();
     void info(bool act_info);
-    void benchmark(Params& params);
-    void outAudio(Params& params);
-    void outVideo(Params& params);
-    void dumpPixValues(Params& params);
-    void dumpPluginFiltersList(Params& params);
+    void benchmark();
+    void outAudio();
+    void outVideo();
+    void dumpPixValues();
+    void dumpPluginFiltersList();
 #if 0
     void x264bd(Params& params);
     void x264raw(Params& params);
 #endif
-    static Avs2PipeMod* create(const char* input, Params& params);
+    static Avs2PipeMod* create(const char* input, Params& p);
 };
 
 #endif /* AVS2PIPEMOD_H */

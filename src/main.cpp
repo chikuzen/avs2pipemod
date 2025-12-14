@@ -92,8 +92,9 @@ static void usage()
 "        add Trim(first_frame,last_frame) to input script.\n"
 "        in info, this option is ignored.\n"
 "\n"
-"   -dll[=path to avisynth.dll  default \"avisynth\"]"
+"   -dll[=path to avisynth.dll  default \"avisynth\"]\n"
 "        specify which avisynth.dll is used.\n"
+"\n"
 "note1 : in yuv4mpeg2 output mode, RGB input that has 720pix height or more\n"
 "        will be converted to YUV with Rec.709 coefficients instead of Rec.601.\n"
 "\n"
@@ -269,13 +270,13 @@ int main(int argc, char** argv)
             a2pm->info(true);
             break;
         case A2PM_ACT_BENCHMARK:
-            a2pm->benchmark(params);
+            a2pm->benchmark();
             break;
         case A2PM_ACT_AUDIO:
-            a2pm->outAudio(params);
+            a2pm->outAudio();
             break;
         case A2PM_ACT_VIDEO:
-            a2pm->outVideo(params);
+            a2pm->outVideo();
             break;
 #if 0
         case A2PM_ACT_X264BD:
@@ -286,10 +287,10 @@ int main(int argc, char** argv)
             break;
 #endif
         case A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT:
-            a2pm->dumpPixValues(params);
+            a2pm->dumpPixValues();
             break;
         case A2PM_ACT_FILTERS:
-            a2pm->dumpPluginFiltersList(params);
+            a2pm->dumpPluginFiltersList();
             break;
         default:
             break;
