@@ -41,8 +41,8 @@
 *.user
 *.aps
 
-vs2015/Release/*
-vs2015/Debug/*
-vs2015/x64/*
-vs2015/.vs/*
 archives/*
+
+/vs2022/.vs/
+/vs2022/avs2pipemod/
+/vs2022/x64/
