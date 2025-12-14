@@ -52,6 +52,8 @@ int get_sample_bits(int pixel_type);
 
 int get_num_planes(int pixel_type);
 
+void convert_channelmask_to_string(uint32_t cm, std::string& cmstr);
+
 //const char* get_string_filter(int pix_type);
 
 class Buffer {

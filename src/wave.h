@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2010-2016 Oka Motofumi <chikuzen.mo at gmail dot com>
  *                         Chris Beswick <chris.beswick@gmail.com>
  *
@@ -19,7 +19,7 @@
  *
  */
 
-// Wave File Specifications 
+// Wave File Specifications
 // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
 
 #ifndef WAVE_H
@@ -44,17 +44,24 @@ enum WaveFormatType : uint32_t {
 
 
 enum speaker_position : uint32_t {
-    WAV_FL  = 0x0001,
-    WAV_FR  = 0x0002,
-    WAV_FC  = 0x0004,
-    WAV_LF  = 0x0008,
-    WAV_BL  = 0x0010,
-    WAV_BR  = 0x0020,
-    WAV_FLC = 0x0040,
-    WAV_FRC = 0x0080,
-    WAV_BC  = 0x0100,
-    WAV_SL  = 0x0200,
-    WAV_SR  = 0x0400,
+    WAV_FL = 0x000001,
+    WAV_FR = 0x000002,
+    WAV_FC = 0x000004,
+    WAV_LF = 0x000008,
+    WAV_BL = 0x000010,
+    WAV_BR = 0x000020,
+    WAV_FLC = 0x000040,
+    WAV_FRC = 0x000080,
+    WAV_BC = 0x000100,
+    WAV_SL = 0x000200,
+    WAV_SR = 0x000400,
+    WAV_TC = 0x000800,
+    WAV_TFL = 0x001000,
+    WAV_TFC = 0x002000,
+    WAV_TFR = 0x004000,
+    WAV_TBL = 0x008000,
+    WAV_TBC = 0x010000,
+    WAV_TBR = 0x020000,
 };
 
 
@@ -71,7 +78,7 @@ struct wave_args_t {
 // gcc docs say it supports this to be compatable with vs.
 #pragma pack(push, 1)
 
-// docs state a chunk should be [id, size, [data, ...]] but this way 
+// docs state a chunk should be [id, size, [data, ...]] but this way
 // means I can get size = sizeof(chunk) - sizeof(chunk.header)
 
 // just a uuid, but this works so...
@@ -83,7 +90,7 @@ struct WaveGuid {
 };
 
 // really RiffChunkHeader, but Wave* naming seems neater
-struct WaveChunkHeader {            
+struct WaveChunkHeader {
     uint32_t        id;             // FOURCC
     uint32_t        size;           // size of chunk data
 };
@@ -150,7 +157,7 @@ struct WaveRiffExtHeader {
     WaveGuid sub_format;
     WaveFactChunk   fact;
     WaveDataChunk   data;
-    WaveRiffExtHeader(wave_args_t& a);
+    WaveRiffExtHeader(wave_args_t& a, uint32_t cm);
 };
 
 

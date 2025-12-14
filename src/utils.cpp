@@ -278,6 +278,41 @@ int get_num_planes(int pixel_type)
     return (pixel_type & VideoInfo::CS_YUVA) ? 4 : 3;
 }
 
+void convert_channelmask_to_string(uint32_t cm, std::string& cmstr)
+{
+    cmstr = "";
+    struct {
+        int mask;
+        const char* pos;
+    } array[] = {
+        {MASK_SPEAKER_FRONT_LEFT, " FL"},
+        {MASK_SPEAKER_FRONT_RIGHT," FR"},
+        {MASK_SPEAKER_FRONT_CENTER, " FC"},
+        {MASK_SPEAKER_LOW_FREQUENCY, " LF"},
+        {MASK_SPEAKER_BACK_LEFT, " BL"},
+        {MASK_SPEAKER_BACK_RIGHT, " BR"},
+        {MASK_SPEAKER_FRONT_LEFT_OF_CENTER, " FLC"},
+        {MASK_SPEAKER_FRONT_RIGHT_OF_CENTER, " FRC"},
+        {MASK_SPEAKER_BACK_CENTER, " BC"},
+        {MASK_SPEAKER_SIDE_LEFT, " SL"},
+        {MASK_SPEAKER_SIDE_RIGHT, " SR"},
+        {MASK_SPEAKER_TOP_CENTER, " TC"},
+        {MASK_SPEAKER_TOP_FRONT_LEFT, " TFL"},
+        {MASK_SPEAKER_TOP_FRONT_CENTER, " TFC"},
+        {MASK_SPEAKER_TOP_FRONT_RIGHT, " TFR"},
+        {MASK_SPEAKER_TOP_BACK_LEFT, " TBL"},
+        {MASK_SPEAKER_TOP_BACK_CENTER, " TBC"},
+        {MASK_SPEAKER_TOP_BACK_RIGHT, " TBR"},
+        {0, nullptr},
+    };
+    for (int i = 0; array[i].mask != 0; ++i) {
+        if (cm & array[i].mask) cmstr += array[i].pos;
+    }
+    if (cmstr.length() > 0) {
+        cmstr = cmstr.substr(1);
+    }
+}
+
 #if 0
 const char* get_string_filter(int pix_type)
 {

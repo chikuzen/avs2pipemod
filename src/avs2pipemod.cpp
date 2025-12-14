@@ -26,6 +26,9 @@
 #include <cstdio>
 #include <cinttypes>
 #include <format>
+#include <array>
+#include <algorithm>
+#include <filesystem>
 
 #include "avs2pipemod.h"
 #include "utils.h"
@@ -76,7 +79,6 @@ Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in, Params& p
     versionString = v.AsString();
 
     sampleBits = get_sample_bits(vi.pixel_type);
-
     numPlanes = get_num_planes(vi.pixel_type);
 }
 
@@ -202,7 +204,8 @@ void Avs2PipeMod::benchmark(Params& params)
 }
 
 
-static void write_audio_file_header(Params& pr, const VideoInfo& vi)
+static void write_audio_file_header(Params& pr, const VideoInfo& vi,
+    float version)
 {
     WaveFormatType format = vi.sample_type == SAMPLE_FLOAT ?
         WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
@@ -210,7 +213,11 @@ static void write_audio_file_header(Params& pr, const VideoInfo& vi)
         vi.BytesPerChannelSample(), vi.num_audio_samples};
 
     if (pr.format_type == FMT_WAVEFORMATEXTENSIBLE) {
-        auto header = WaveRiffExtHeader(args);
+        uint32_t cm = 0;
+        if (version > 3.72 && vi.IsChannelMaskKnown()) {
+            cm = vi.GetChannelMask();
+        }
+        auto header = WaveRiffExtHeader(args, cm);
         fwrite(&header, sizeof(header), 1, stdout);
         return;
     }
@@ -247,7 +254,7 @@ void Avs2PipeMod::outAudio(Params& params)
     int64_t elapsed = get_current_time();
 
     if (params.format_type != FMT_RAWAUDIO) {
-        write_audio_file_header(params, vi);
+        write_audio_file_header(params, vi, version);
     }
 
     clip->GetAudio(data, 0, target % count, env);
@@ -523,7 +530,6 @@ void Avs2PipeMod::dumpPluginFiltersList(Params& params)
         throw std::runtime_error("plugin funtions/filters not found.");
     }
 }
-
 
 Avs2PipeMod* Avs2PipeMod::create(const char* input, Params& p)
 {
