@@ -213,7 +213,7 @@ const char* get_string_video_out(int pix_type)
 }
 
 
-const char* get_string_y4mheader(int pix_type)
+const char* get_string_y4mheader(int pix_type, int chromaloc)
 {
     switch (pix_type) {
     case VideoInfo::CS_Y8:          return "mono";
@@ -222,7 +222,13 @@ const char* get_string_y4mheader(int pix_type)
     case VideoInfo::CS_YV411:       return "411";
 
     case VideoInfo::CS_YV12:
-    case VideoInfo::CS_I420:        return "420mpeg2";
+    case VideoInfo::CS_I420:
+        switch (chromaloc) {
+        case 0:                     return "420mpeg2";
+        case 1:                     return "420jpeg";
+        case 2:                     return "420paldv";
+        default:                    return "420mpeg2";
+    }
     case VideoInfo::CS_YUV420P10:   return "420p10";
     case VideoInfo::CS_YUV420P12:   return "420p12";
     case VideoInfo::CS_YUV420P14:   return "420p14";

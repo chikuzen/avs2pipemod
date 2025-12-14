@@ -42,8 +42,27 @@ static inline int64_t get_current_time(void)
 }
 
 
+static void set_frame_props(Params& p, PVideoFrame& vf, ise_t* env)
+{
+    auto map = env->getFramePropsRO(vf);
+    auto set_prop = [env, map](int& var, const char* key) {
+        if (env->propGetType(map, key) == 'i') {
+            var = env->propGetInt(map, key, 0, nullptr);
+        }
+    };
 
-Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in) :
+    if (p.sarnum == 0) {
+        set_prop(p.sarnum, "_SARNum");
+        set_prop(p.sarnum, "_SARDen");
+    }
+    set_prop(p.colorrange, "_ColorRange");
+    set_prop(p.colorprim, "_Primaries");
+    set_prop(p.transfer, "_Transfer");
+    set_prop(p.colormatrix, "_Matrix");
+    set_prop(p.chromaloc, "_ChromaLocation");
+}
+
+Avs2PipeMod::Avs2PipeMod(HMODULE d, ise_t* e, PClip c, const char* in, Params& p) :
     dll(d), env(e), clip(c), input(in), versionString("unknown")
 {
     vi = clip->GetVideoInfo();
@@ -93,7 +112,6 @@ void Avs2PipeMod::trim(int start, int end)
     AVSValue array[] = { clip, start, end };
     invokeFilter("Trim", AVSValue(array, 3));
 }
-
 
 
 void Avs2PipeMod::info(bool act_info)
@@ -289,8 +307,6 @@ void Avs2PipeMod::prepareY4MOut(Params& params)
     if (sampleBits == 32 || (vi.IsY() && (sampleBits >= 10 && sampleBits < 16))) {
         invokeFilter("ConvertTo16bit", clip);
     }
-
-
 }
 
 
@@ -308,16 +324,30 @@ int Avs2PipeMod::writeFrames(Params& params)
     auto b = Buffer(buffsize, 64);
     uint8_t* buff = reinterpret_cast<uint8_t*>(b.data());
 
+    auto frame = clip->GetFrame(0, env);
+    int wrote = 0;
+
     if (Y4MOUT) {
-        fprintf(stdout, "YUV4MPEG2 W%d H%d F%u:%u I%c A%d:%d C%s\n",
-                vi.width, vi.height, vi.fps_numerator, vi.fps_denominator,
-                params.frame_type, params.sar[0], params.sar[1],
-                get_string_y4mheader(vi.pixel_type));
+        if (version >= 3.70) {
+            set_frame_props(params, frame, env);
+        }
+        const char* range = "";
+        if (params.colorrange == 0) {
+            range = " XCOLORRANGE=FULL";
+        } else if (params.colorrange == 1) {
+            range = " XCOLORRANGE=LIMITED";
+        }
+        const char* color = get_string_y4mheader(vi.pixel_type, params.chromaloc);
+        auto header = std::format(
+            "YUV4MPEG2 W{} H{} F{}:{} I{} A{}:{} C{}{}"
+            " XCOLORPRIMARIES={} XTRANSFER={} XCOLORMATRIX={}",
+            vi.width, vi.height, vi.fps_numerator, vi.fps_denominator,
+            params.frame_type, params.sarnum, params.sarden, color, range,
+            params.colorprim, params.transfer, params.colormatrix);
+        puts(header.c_str());
     }
 
-    int wrote = 0;
-    while (wrote < vi.num_frames) {
-        auto frame = clip->GetFrame(wrote, env);
+    while (true) {
         if (Y4MOUT) {
             puts("FRAME");
         }
@@ -340,7 +370,8 @@ int Avs2PipeMod::writeFrames(Params& params)
                 goto finish;
             }
         }
-        ++wrote;
+        if (++wrote >= vi.num_frames) break;
+        frame = clip->GetFrame(wrote, env);
     }
 
 finish:
@@ -494,22 +525,22 @@ void Avs2PipeMod::dumpPluginFiltersList(Params& params)
 }
 
 
-Avs2PipeMod* Avs2PipeMod::create(const char* input, const char* dll_path)
+Avs2PipeMod* Avs2PipeMod::create(const char* input, Params& p)
 {
     typedef ise_t* (__stdcall *cse_t)(int);
-    constexpr int AVS_INTERFACE_VERSION = 6;
+    constexpr int AVS_INTERFACE_VERSION = 11;
 
     HMODULE dll = nullptr;
     ise_t* env = nullptr;
 
     try {
-        dll = LoadLibraryExA(dll_path ? dll_path : "avisynth", nullptr,
-                             LOAD_WITH_ALTERED_SEARCH_PATH);
+        const char* d = p.dll_path ? p.dll_path : "avisynth";
+        dll = LoadLibraryExA(d , nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         validate(!dll, "failed to load avisynth.dll\n");
 
-        cse_t create_env = reinterpret_cast<cse_t>(
-            GetProcAddress(dll, "CreateScriptEnvironment"));
-        validate(!create_env, "failed to get CreateScriptEnvironment().\n");
+        auto pa = GetProcAddress(dll, "CreateScriptEnvironment");
+        validate(!pa, "failed to load avisynth.dll\n");
+        cse_t create_env = reinterpret_cast<cse_t>(pa);
 
         env = create_env(AVS_INTERFACE_VERSION);
         validate(!env, "failed to create avisynth script environment.\n");
@@ -519,15 +550,17 @@ Avs2PipeMod* Avs2PipeMod::create(const char* input, const char* dll_path)
         AVSValue res = env->Invoke("Import", AVSValue(input));
         validate(!res.IsClip(), "Script didn't return a clip.\n");
 
-        return new Avs2PipeMod(dll, env, res.AsClip(), input);
+        return new Avs2PipeMod(dll, env, res.AsClip(), input, p);
 
     } catch (std::exception& e) {
         AVS_linkage = nullptr;
         if (env) {
             env->DeleteScriptEnvironment();
+            env = nullptr;
         }
         if (dll) {
             FreeLibrary(dll);
+            dll = nullptr;
         }
         throw e;
     } catch (AvisynthError e) {

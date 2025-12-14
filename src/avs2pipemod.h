@@ -108,7 +108,7 @@ class Avs2PipeMod {
     template <typename T> int writePixValuesAsText();
 
 public:
-    Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input);
+    Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input, Params& p);
     ~Avs2PipeMod();
     void info(bool act_info);
     void benchmark(Params& params);
@@ -120,9 +120,7 @@ public:
     void x264bd(Params& params);
     void x264raw(Params& params);
 #endif
-    static Avs2PipeMod* create(const char* input, const char* dll_path);
+    static Avs2PipeMod* create(const char* input, Params& params);
 };
-
-
 
 #endif /* AVS2PIPEMOD_H */

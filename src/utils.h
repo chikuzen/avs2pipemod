@@ -46,7 +46,7 @@ const char* get_string_info(int pix_type);
 
 const char* get_string_video_out(int pix_type);
 
-const char* get_string_y4mheader(int pix_type);
+const char* get_string_y4mheader(int pix_type, int chromaloc);
 
 int get_sample_bits(int pixel_type);
 

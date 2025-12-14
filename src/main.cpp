@@ -260,7 +260,7 @@ int main(int argc, char** argv)
         parse_opts(argc, argv, params);
 
         std::unique_ptr<Avs2PipeMod> a2pm(
-            Avs2PipeMod::create(argv[argc - 1], params.dll_path));
+            Avs2PipeMod::create(argv[argc - 1], params));
 
         switch(params.action) {
         case A2PM_ACT_INFO:
