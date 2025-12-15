@@ -19,11 +19,10 @@
 */
 
 #include <memory>
+#include <format>
 #include "avs2pipemod.h"
 #include "utils.h"
 #include "getopt.h"
-#include <format>
-
 
 
 static void usage()
@@ -249,6 +248,9 @@ static void parse_opts(int argc, char **argv, Params& p)
     }
 }
 
+#if !defined(_WIN32)
+#define SetConsoleOutputCP(args)
+#endif
 
 
 int main(int argc, char** argv)
@@ -257,6 +259,12 @@ int main(int argc, char** argv)
         usage();
         return -1;
     }
+
+#if defined(_WIN32)
+    auto cp = GetConsoleOutputCP();
+#endif;
+    SetConsoleOutputCP(CP_UTF8);
+
 
     try {
         auto params = Params();
@@ -299,11 +307,14 @@ int main(int argc, char** argv)
         if (e.what()) {
             fprintf(stderr, "avs2pipemod[error]: %s", e.what());
         }
+        SetConsoleOutputCP(cp);
         exit(-1);
     } catch (AvisynthError& e) {
         fprintf(stderr, "avs2pipemod[error]: %s", e.msg);
+        SetConsoleOutputCP(cp);
         exit(-1);
     }
+    SetConsoleOutputCP(cp);
 
     return 0;
 }

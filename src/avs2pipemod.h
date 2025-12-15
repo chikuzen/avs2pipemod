@@ -118,10 +118,10 @@ public:
     void outVideo();
     void dumpPixValues();
     void dumpPluginFiltersList();
-#if 0
+/*
     void x264bd(Params& params);
     void x264raw(Params& params);
-#endif
+*/
     static Avs2PipeMod* create(const char* input, Params& p);
 };
 

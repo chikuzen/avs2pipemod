@@ -535,6 +535,7 @@ void Avs2PipeMod::dumpPluginFiltersList()
     }
 }
 
+
 Avs2PipeMod* Avs2PipeMod::create(const char* input, Params& p)
 {
     typedef ise_t* (__stdcall *cse_t)(int);
