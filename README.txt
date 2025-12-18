@@ -10,6 +10,7 @@ Differences with original
 * New option 'trim'.
 * New option 'dumptxt'
 * New option 'filters'
+* New option 'dumpprops'
 * 'y4mp', 'y4mt', 'y4mb' and 'rawvideo' options instead of 'video'.
 * FieldBased input will be corrected to framebased on yuv4mpeg2 output modes.
 * Colorspace conversion that takes colormatrix and interlace into consideration.
@@ -22,9 +23,9 @@ Usage
 	Then help will be displayed.
 
 Requirement
-	- Avisynth2.6.0final / Avisynth+MT r1706 or later.
-	- Windows Vista sp2 or later.
-	- Microsoft Visual C++ 2015 Redistributable Update 3
+	- Avisynth2.6.0final / Avisynth+ 3.7.5 or later.
+	- Windows 7 sp1 or later.
+	- Microsoft Visual C++ Redistributable v14.
 
 
                                         written by Oka Motofumi
