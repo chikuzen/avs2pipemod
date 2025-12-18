@@ -87,6 +87,8 @@ static void usage()
 "\n"
 "   -dumptxt - dump pixel values as tab separated text to stdout.\n"
 "\n"
+"   -dumpprops - dump frame properties as JSON string to stdout.\n"
+"\n"
 "   -trim[=first_frame,last_frame  default 0,0]\n"
 "        add Trim(first_frame,last_frame) to input script.\n"
 "        in info, this option is ignored.\n"
@@ -151,6 +153,7 @@ static void parse_opts(int argc, char **argv, Params& p)
 #endif
         { "dumpyuv", no_argument, nullptr, 'd' }, /* for backward compatibility */
         { "dumptxt", no_argument, nullptr, 'd' },
+        { "dumpprops", no_argument, nullptr, 'j' },
         { "filters", no_argument, nullptr, 'f' },
         { "trim", required_argument, nullptr, 'T' },
         { "dll", required_argument, nullptr, 'D' },
@@ -230,6 +233,9 @@ static void parse_opts(int argc, char **argv, Params& p)
         case 'd':
             p.action = A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT;
             break;
+        case 'j':
+            p.action = A2PM_ACT_DUMP_FRAME_PROPERTIES_AS_JSON;
+            break;
         case 'T':
             ret = sscanf(optarg, "%d,%d", &p.trimstart, &p.trimend);
             break;
@@ -248,9 +254,6 @@ static void parse_opts(int argc, char **argv, Params& p)
     }
 }
 
-#if !defined(_WIN32)
-#define SetConsoleOutputCP(args)
-#endif
 
 
 int main(int argc, char** argv)
@@ -262,6 +265,8 @@ int main(int argc, char** argv)
 
 #if defined(_WIN32)
     auto cp = GetConsoleOutputCP();
+#else
+    #define SetConsoleOutputCP(X)
 #endif;
     SetConsoleOutputCP(CP_UTF8);
 
@@ -296,6 +301,9 @@ int main(int argc, char** argv)
 #endif
         case A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT:
             a2pm->dumpPixValues();
+            break;
+        case A2PM_ACT_DUMP_FRAME_PROPERTIES_AS_JSON:
+            a2pm->dumpFrameProps();
             break;
         case A2PM_ACT_FILTERS:
             a2pm->dumpPluginFiltersList();

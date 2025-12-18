@@ -136,7 +136,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
     </Link>
     <Manifest>
-      <AdditionalManifestFiles>E:\myprojects\avs2pipemod\vs2022\avs2pipemod.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+      <AdditionalManifestFiles>..\src\avs2pipemod.manifest</AdditionalManifestFiles>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -150,7 +150,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Manifest>
-      <AdditionalManifestFiles>E:\myprojects\avs2pipemod\vs2022\avs2pipemod.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+      <AdditionalManifestFiles>..\src\avs2pipemod.manifest</AdditionalManifestFiles>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>

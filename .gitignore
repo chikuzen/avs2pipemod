@@ -41,7 +41,7 @@
 *.user
 *.aps
 
-archives/*
+/archives/
 
 /vs2022/.vs/
 /vs2022/avs2pipemod/

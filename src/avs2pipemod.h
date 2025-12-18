@@ -40,6 +40,7 @@ enum action_t {
     A2PM_ACT_AUDIO,
     A2PM_ACT_VIDEO,
     A2PM_ACT_DUMP_PIXEL_VALUES_AS_TXT,
+    A2PM_ACT_DUMP_FRAME_PROPERTIES_AS_JSON,
     A2PM_ACT_FILTERS,
 #if 0
     A2PM_ACT_X264BD,
@@ -108,7 +109,6 @@ class Avs2PipeMod {
     void prepareY4MOut();
     template <bool y4mout> int writeFrames();
     template <typename T> int writePixValuesAsText();
-
 public:
     Avs2PipeMod(HMODULE dll, ise_t* env, PClip clip, const char* input, Params& p);
     ~Avs2PipeMod();
@@ -118,6 +118,7 @@ public:
     void outVideo();
     void dumpPixValues();
     void dumpPluginFiltersList();
+    void dumpFrameProps();
 /*
     void x264bd(Params& params);
     void x264raw(Params& params);

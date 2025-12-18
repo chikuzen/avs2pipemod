@@ -26,7 +26,9 @@
 #include <cstdio>
 #include <cinttypes>
 #include <format>
-
+#include <sstream>
+#include <vector>
+#include <algorithm>
 #include "avs2pipemod.h"
 #include "utils.h"
 #include "wave.h"
@@ -307,7 +309,7 @@ static void set_frame_props(Params& p, PVideoFrame& vf, ise_t* env)
         if (env->propGetType(map, key) == 'i') {
             var = env->propGetInt(map, key, 0, nullptr);
         }
-        };
+    };
 
     if (p.sarnum == 0) {
         set_prop(p.sarnum, "_SARNum");
@@ -533,6 +535,135 @@ void Avs2PipeMod::dumpPluginFiltersList()
     } catch (...) {
         throw std::runtime_error("plugin funtions/filters not found.");
     }
+}
+
+static inline void procIntProp(std::stringstream& ss, const AVSMap* map,
+    ise_t* env, const char* key)
+{
+    auto elms = env->propNumElements(map, key);
+    if (elms > 1) {
+        ss << "[";
+        for (auto i = 0; i < elms; ++i) {
+            ss << env->propGetInt(map, key, i, nullptr);
+            ss << (i < elms - 1 ? ", " : "]");
+        }
+    } else {
+        ss << env->propGetInt(map, key, 0, nullptr);
+    }
+}
+
+static inline void procFloatProp(std::stringstream& ss, const AVSMap* map,
+    ise_t* env, const char* key)
+{
+    auto elms = env->propNumElements(map, key);
+    if (elms > 1) {
+        ss << "[";
+        for (auto i = 0; i < elms; ++i) {
+            ss << std::format("{:.07f}",
+                env->propGetFloat(map, key, i, nullptr))
+                << (i < elms - 1 ? ", " : "]");
+        }
+    } else {
+        ss << std::format("{:.07f}",
+            env->propGetFloat(map, key, 0, nullptr));
+    }
+}
+
+
+static inline void
+setData(std::stringstream& ss,  const AVSMap* map, const char* key, int idx,
+    ise_t* env)
+{
+    auto data = env->propGetData(map, key, idx, nullptr);
+    auto hint = env->propGetDataTypeHint(map, key, idx, nullptr);
+    if (hint == AVSPropDataTypeHint::PROPDATATYPEHINT_BINARY) {
+        auto size = env->propGetDataSize(map, key, idx, nullptr);
+        auto length = std::min(size, 16);
+        std::vector<uint8_t> v(data, data + length);
+        ss << "\"";
+        for (auto j = 0; j < length; ++j) {
+            ss << std::format("{:02x} ", v[j]);
+        }
+        ss << (length < size ? "...\"" : "\"");
+    } else {
+        ss << std::format("\"{}\"", data);
+    }
+}
+
+
+static inline void procDataProp(std::stringstream& ss, const AVSMap* map,
+    ise_t* env, const char* key)
+{
+    auto elms = env->propNumElements(map, key);
+    if (elms > 1) {
+        ss << "[";
+        for (auto i = 0; i < elms; ++i) {
+            setData(ss, map, key, i, env);
+            ss << (i < elms - 1 ? ", " : "]");
+        }
+    } else {
+        setData(ss, map, key, 0, env);
+    }
+}
+
+
+void Avs2PipeMod::dumpFrameProps()
+{
+    validate(version < 3.70, "frame properties does not exists.\n");
+    validate(!vi.HasVideo(), "clip has no video.\n");
+    trim();
+
+    auto setProp = [](const char* key, const std::stringstream& val,
+        const char* comma, std::stringstream& line) {
+        line << std::format("\"{}\": {}{}", key, val.str(), comma);
+    };
+
+    int passed = 0;
+    fputs("[\n", stdout);
+    while (passed < vi.num_frames) {
+        auto frame = clip->GetFrame(passed++, env);
+        auto map = env->getFramePropsRO(frame);
+        auto num = env->propNumKeys(map);
+
+        std::stringstream line;
+        line << "\t{";
+        for (auto i = 0; i < num; ++i) {
+            auto key = env->propGetKey(map, i);
+            auto t = env->propGetType(map, key);
+            auto comma = i == num - 1 ? "" : ", ";
+            std::stringstream ss;
+            if (t == 'i') {
+                procIntProp(ss, map, env, key);
+                setProp(key, ss, comma, line);
+                continue;
+            }
+            if (t == 'f') {
+                procFloatProp(ss, map, env, key);
+                setProp(key, ss, comma, line);
+                continue;
+            }
+            if (t == 's') {
+                procDataProp(ss, map, env, key);
+                setProp(key, ss, comma, line);
+            }
+        }
+        if (vi.num_frames == passed) {
+            line << "}\n";
+        } else {
+            line << "},\n";
+        }
+        fputs(line.str().c_str(), stdout);
+
+        fprintf(stderr, "\ravs2pipemod[info]: output %d/%d frame properties.",
+            passed, vi.num_frames);
+    }
+    fputs("]\n", stdout);
+    fputs("\n", stderr);
+    fflush(stdout);
+
+    validate(passed != vi.num_frames,
+        std::format("only output {} of {} frame properties.\n", passed,
+            vi.num_frames));
 }
 
 
