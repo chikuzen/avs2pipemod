@@ -313,7 +313,7 @@ static void set_frame_props(Params& p, PVideoFrame& vf, ise_t* env)
 
     if (p.sarnum == 0) {
         set_prop(p.sarnum, "_SARNum");
-        set_prop(p.sarnum, "_SARDen");
+        set_prop(p.sarden, "_SARDen");
     }
     set_prop(p.colorrange, "_ColorRange");
     set_prop(p.colorprim, "_Primaries");

@@ -31,7 +31,7 @@
 #include <avisynth/avisynth.h>
 #endif
 
-#define A2PM_VERSION "1.3.0"
+#define A2PM_VERSION "1.3.1"
 
 enum action_t {
     A2PM_ACT_NOTHING = 0,
